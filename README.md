@@ -1,2 +1,2 @@
 # json-focus
-JSON schema, validation and serialization
+*JSON schema, validation and serialization*
