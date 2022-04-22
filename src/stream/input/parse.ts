@@ -9,6 +9,7 @@ async function* generator(source: AsyncIterable<string>): AsyncGenerator<SimpleT
       parser.pipe(fragment);
       while (parser.tuples.length) {
         const value = parser.tuples.shift();
+        console.log('====OUT:', value);
         if (!isUndefined(value)) {
           yield value;
         }

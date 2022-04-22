@@ -32,6 +32,7 @@ const json = {
 }
 
 describe('Async JSON Perser', () => {
+  /*
   it('should parse integer', async () => {
     const output = await test(JSON.stringify(100));
     expect(output).toEqual([100]);
@@ -58,9 +59,11 @@ describe('Async JSON Perser', () => {
     console.log(JSON.stringify(JSON.stringify(output)));
     // expect(output).toEqual([[], [{ name: 'Lucas' }, 0], [{ last: 'Oromi', age: 44 }, 1]]);
     expect(merge(output)).toEqual(array);
-  });
+  });*/
 
   it('should parse object', async () => {
+    const parse = jest.fn(() => test(JSON.stringify(json)));
+    expect(parse).not.toThrow();
     const output = await test(JSON.stringify(json));
     console.log(JSON.stringify(JSON.stringify(output)));
     // expect(output).toEqual([{}, ['Lucas', 'first-name'], ['Oromi', 'last-name']]);
