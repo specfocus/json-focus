@@ -386,18 +386,18 @@ export default abstract class BaseSchema<
     value: any,
     options: CastOptions<TConfig['context']> = {},
   ): this['__outputType'] {
-    let resolvedSchema = this.resolve({
+    const resolvedSchema = this.resolve({
       value,
       ...options,
       // parent: options.parent,
       // context: options.context,
     });
 
-    let result = resolvedSchema._cast(value, options);
+    const result = resolvedSchema._cast(value, options);
 
     if (options.assert !== false && !resolvedSchema.isType(result)) {
-      let formattedValue = printValue(value);
-      let formattedResult = printValue(result);
+      const formattedValue = printValue(value);
+      const formattedResult = printValue(result);
       throw new TypeError(
         `The value of ${options.path || 'field'
         } could not be cast to a value ` +
@@ -565,7 +565,7 @@ export default abstract class BaseSchema<
   }
 
   protected _getDefault() {
-    let defaultValue = this.spec.default;
+    const defaultValue = this.spec.default;
 
     if (defaultValue == null) {
       return defaultValue;
@@ -591,7 +591,7 @@ export default abstract class BaseSchema<
       return this._getDefault();
     }
 
-    let next = this.clone({ default: def });
+    const next = this.clone({ default: def });
 
     return next as any;
   }

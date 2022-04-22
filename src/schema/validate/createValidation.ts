@@ -73,7 +73,7 @@ export default function createValidation(config: {
     cb: Callback,
   ) {
     const { name, test, params, message } = config;
-    let { parent, context } = options;
+    const { parent, context } = options;
 
     function resolve<T>(item: T | Reference<T>) {
       return Ref.isRef(item) ? item.getValue(value, parent, context) : item;

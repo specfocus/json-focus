@@ -32,137 +32,143 @@ mixed().required().nullable();
 string().required().nullable();
 
 /** Type utils */
-{
-  const strRequired = string().required();
+describe('Type utils', () => {
+  it('should test', () => {
+    const strRequired = string().required();
 
-  // string().default('hi').cast();
+    // string().default('hi').cast();
 
-  // $ExpectType string
-  strRequired.cast(undefined);
+    // $ExpectType string
+    expect(jest.fn(() => strRequired.cast(undefined))).toThrow();
 
-  //
-  const strNullableOptional = string().nullable().optional();
+    //
+    const strNullableOptional = string().nullable().optional();
 
-  // $ExpectType string | null | undefined
-  strNullableOptional.cast('');
+    // $ExpectType string | null | undefined
+    strNullableOptional.cast('');
 
-  // $ExpectType string
-  strNullableOptional.required().validateSync('');
+    // $ExpectType string
+    expect(jest.fn(() => strNullableOptional.required().validateSync(''))).toThrow();
 
-  //
-  //
-  const strNullable = string().nullable();
+    //
+    //
+    const strNullable = string().nullable();
 
-  // $ExpectType string | null | undefined
-  strNullable.validateSync('');
+    // $ExpectType string | null | undefined
+    expect(jest.fn(() => strNullable.validateSync(''))).not.toThrow();
 
-  const strDefined = string().default('');
+    const strDefined = string().default('');
 
-  // $ExpectType string
-  const _strDefined = strDefined.getDefault();
+    // $ExpectType string
+    const _strDefined = strDefined.getDefault();
 
-  const strDefault = string().nullable().default('').nullable().trim();
+    const strDefault = string().nullable().default('').nullable().trim();
 
-  // $ExpectType string | null
-  strDefault.cast('');
+    // $ExpectType string | null
+    expect(jest.fn(() => strDefault.cast(''))).not.toThrow();
 
-  // $ExpectType string | null
-  strDefault.validateSync('');
+    // $ExpectType string | null
+    expect(jest.fn(() => strDefault.validateSync(''))).not.toThrow();
 
-  //
-  //
-  const strDefaultRequired = string().nullable().required().default('').trim();
+    //
+    //
+    const strDefaultRequired = string().nullable().required().default('').trim();
 
-  // $ExpectType string
-  strDefaultRequired.cast('');
+    // $ExpectType string
+    expect(jest.fn(() => strDefaultRequired.cast(''))).not.toThrow();
 
-  // $ExpectType string
-  strDefaultRequired.validateSync(null);
-}
-
-{
-  const obj = object({
-    string: string<'foo'>().defined(),
-    number: number().default(1),
-    removed: number().strip(),
-    ref: ref('string'),
-    nest: object({
-      other: string(),
-    }),
-    lazy: lazy(() => number().defined()),
+    // $ExpectType string
+    expect(jest.fn(() => strDefaultRequired.validateSync(null))).toThrow();
   });
 
-  type _d1 = DefaultFromShape<typeof obj['fields']>;
 
-  // $ExpectType number | undefined
-  type _i1 = TypeOfShape<typeof obj['fields']>['number'];
+  it('should test', () => {
+    const obj = object({
+      string: string<'foo'>().defined(),
+      number: number().default(1),
+      removed: number().strip(),
+      ref: ref('string'),
+      nest: object({
+        other: string(),
+      }),
+      lazy: lazy(() => number().defined()),
+    });
 
-  // $ExpectType "foo"
-  type _i2 = TypeOfShape<typeof obj['fields']>['string'];
+    type _d1 = DefaultFromShape<typeof obj['fields']>;
 
-  // $ExpectType unknown
-  type _i3 = TypeOfShape<typeof obj['fields']>['ref'];
+    // $ExpectType number | undefined
+    type _i1 = TypeOfShape<typeof obj['fields']>['number'];
 
-  // $ExpectType number
-  type _i33 = TypeOfShape<typeof obj['fields']>['lazy'];
+    // $ExpectType "foo"
+    type _i2 = TypeOfShape<typeof obj['fields']>['string'];
 
-  // $ExpectType number
-  type _i4 = AssertsShape<typeof obj['fields']>['number'];
+    // $ExpectType unknown
+    type _i3 = TypeOfShape<typeof obj['fields']>['ref'];
 
-  // $ExpectType "foo"
-  type _i5 = AssertsShape<typeof obj['fields']>['string'];
+    // $ExpectType number
+    type _i33 = TypeOfShape<typeof obj['fields']>['lazy'];
 
-  type _i6 = _<AssertsShape<typeof obj['fields']>>;
+    // $ExpectType number
+    type _i4 = AssertsShape<typeof obj['fields']>['number'];
 
-  // $ExpectType number
-  type _i7 = AssertsShape<typeof obj['fields']>['lazy'];
+    // $ExpectType "foo"
+    type _i5 = AssertsShape<typeof obj['fields']>['string'];
 
-  const cast1 = obj.cast({});
+    type _i6 = _<AssertsShape<typeof obj['fields']>>;
 
-  // $ExpectType string | undefined
-  cast1!.nest!.other;
+    // $ExpectType number
+    type _i7 = AssertsShape<typeof obj['fields']>['lazy'];
+    expect(jest.fn(() => {
+      const cast1 = obj.cast({});
 
-  // $ExpectType "foo"
-  cast1!.string;
+      // $ExpectType string | undefined
+      cast1!.nest!.other;
 
-  // $ExpectType number
-  cast1!.number;
+      // $ExpectType "foo"
+      cast1!.string;
 
-  //
-  // Object Defaults
-  //
-  const dflt1 = obj.getDefaultFromShape();
+      // $ExpectType number
+      cast1!.number;
+    })).toThrow();
 
-  // $ExpectType number
-  dflt1.number;
+    //
+    // Object Defaults
+    //
+    expect(jest.fn(() => {
+      const dflt1 = obj.getDefaultFromShape();
 
-  // $ExpectType undefined
-  dflt1.ref;
+      // $ExpectType number
+      dflt1.number;
 
-  // $ExpectType undefined
-  dflt1.lazy;
+      // $ExpectType undefined
+      dflt1.ref;
 
-  // $ExpectType undefined
-  dflt1.string;
+      // $ExpectType undefined
+      dflt1.lazy;
 
-  // $ExpectType undefined
-  dflt1.nest.other;
+      // $ExpectType undefined
+      dflt1.string;
 
-  const merge = object({
-    field: string().required(),
-    other: string().default(''),
-  }).shape({
-    field: number(),
+      // $ExpectType undefined
+      dflt1.nest.other;
+    })).not.toThrow();
+
+    const merge = object({
+      field: string().required(),
+      other: string().default(''),
+    }).shape({
+      field: number(),
+    });
+
+    // $ExpectType number | undefined
+    expect(jest.fn(() => merge.cast({}).field)).not.toThrow();
+
+    // $ExpectType string
+    expect(jest.fn(() => merge.cast({}).other)).not.toThrow();
   });
+});
 
-  // $ExpectType number | undefined
-  merge.cast({}).field;
-
-  // $ExpectType string
-  merge.cast({}).other;
-}
-
-ObjectPartial: {
+describe('ObjectPartial', () => {
   const schema = object({
     // age: number(),
     name: string().required(),
@@ -177,24 +183,24 @@ ObjectPartial: {
   const partial = schema.partial();
 
   // $ExpectType string | undefined
-  partial.validateSync({ age: '1' })!.name;
+  expect(jest.fn(() => partial.validateSync({ age: '1' })!.name)).toThrow();
 
   // $ExpectType StringSchema<string | undefined, Config<AnyObject, "">>
   partial.fields.name;
 
   // $ExpectType string
-  partial.validateSync({})!.address!.line1;
+  expect(jest.fn(() => partial.validateSync({})!.address!.line1)).toThrow();
 
   const deepPartial = schema.deepPartial();
 
   // $ExpectType string | undefined
-  deepPartial.validateSync({ age: '1' })!.name;
+  expect(jest.fn(() => deepPartial.validateSync({ age: '1' })!.name)).toThrow();
 
   // $ExpectType string | undefined
-  deepPartial.validateSync({})!.address!.line1;
-}
+  expect(jest.fn(() => deepPartial.validateSync({})!.address!.line1)).toThrow();
+});
 
-ObjectPick: {
+describe('ObjectPick', () => {
   const schema = object({
     age: number(),
     name: string().required(),
@@ -203,10 +209,10 @@ ObjectPick: {
     .required();
 
   // $ExpectType number | undefined
-  schema.pick(['age']).validateSync({ age: '1' }).age;
-}
+  expect(jest.fn(() => schema.pick(['age']).validateSync({ age: '1' }).age)).not.toThrow();
+});
 
-ObjectOmit: {
+describe('ObjectOmit', () => {
   const schema = object({
     age: number(),
     name: string().required(),
@@ -215,13 +221,13 @@ ObjectOmit: {
     .required();
 
   // $ExpectType string
-  schema.omit(['age']).validateSync({ name: '1' }).name;
+  expect(jest.fn(() => schema.omit(['age']).validateSync({ name: '1' }).name)).not.toThrow();
 
   // $ExpectType string | undefined
-  schema.omit(['age']).partial().validateSync({ name: '1' }).name;
-}
+  expect(jest.fn(() => schema.omit(['age']).partial().validateSync({ name: '1' }).name)).not.toThrow();
+});
 
-SchemaOf: {
+describe('SchemaOf', () => {
   type Person = {
     nested?: {
       name: string;
@@ -249,9 +255,9 @@ SchemaOf: {
       name: string().required(),
     }),
   });
-}
+});
 
-SchemaOfDate: {
+describe('SchemaOfDate', () => {
   type Employee = {
     hire_date: Date;
     name: string;
@@ -263,9 +269,9 @@ SchemaOfDate: {
     name: string().defined(),
     hire_date: date().defined(),
   });
-}
+});
 
-SchemaOfDateArray: {
+describe('SchemaOfDateArray', () => {
   type EmployeeWithPromotions = {
     promotion_dates: Date[];
     name: string;
@@ -277,9 +283,9 @@ SchemaOfDateArray: {
     name: string().defined(),
     promotion_dates: array().of(date().defined()),
   });
-}
+});
 
-SchemaOfFile: {
+describe('SchemaOfFile', () => {
   type Document = {
     file: File;
     date_uploaded: Date;
@@ -294,9 +300,9 @@ SchemaOfFile: {
     date_uploaded: date().defined(),
     notes: string().defined(),
   });
-}
+});
 
-SchemaOfFileArray: {
+describe('SchemaOfFileArray', () => {
   type DocumentWithFullHistory = {
     history: File[];
     name: string;
@@ -309,9 +315,9 @@ SchemaOfFileArray: {
     name: string().defined(),
     history: array().of(mixed<File>().defined()),
   });
-}
+});
 
-{
+describe('ExpectType', () => {
   // const str = string();
   // type f = Type<typeof str>;
 
@@ -320,125 +326,137 @@ SchemaOfFileArray: {
   type _f = ResolveFlags<string | undefined, Config<any, ''>['flags']>;
 
   // $ExpectType (string | undefined)[] | undefined
-  array(string()).cast(null);
+  expect(jest.fn(() => array(string()).cast(null))).toThrow();
 
   // $ExpectType string[] | undefined
-  array(string().required()).validateSync(null);
+  expect(jest.fn(() => array(string().required()).validateSync(null))).toThrow();
 
   // $ExpectType string[]
-  array(string().default('')).required().validateSync(null);
+  expect(jest.fn(() => array(string().default('')).required().validateSync(null))).toThrow();
 
   // $ExpectType string[] | undefined
-  array(string().default('')).validateSync(null);
+  expect(jest.fn(() => array(string().default('')).validateSync(null))).toThrow();
 
   // $ExpectType string[] | null | undefined
-  array(string().default('')).nullable().validateSync(null);
+  expect(jest.fn(() => array(string().default('')).nullable().validateSync(null))).not.toThrow();
 
   // $ExpectType (string | null)[] | undefined
-  array(string().nullable().default('')).validateSync(null);
+  expect(jest.fn(() => array(string().nullable().default('')).validateSync(null))).toThrow();
 
   // $ExpectType any[]
-  array()
+  expect(jest.fn(() => array()
     .default([] as number[])
-    .getDefault();
+    .getDefault())).not.toThrow();;
 
   // $ExpectType (string | null)[] | null
-  array(string().nullable().default(''))
+  expect(jest.fn(() => array(string().nullable().default(''))
     .nullable()
     .default(() => [] as string[])
-    .validateSync(null);
+    .validateSync(null))).not.toThrow();;
 
   // $ExpectType string[] | undefined
-  array(lazy(() => string().default(''))).validateSync(null);
+  // @ts-ignore
+  expect(jest.fn(() => array(lazy(() => string().default(''))).validateSync(null))).toThrow();;
 
   const numList = [1, 2];
 
   // $ExpectType (number | undefined)[]
-  array(number()).default(numList).getDefault();
+  expect(jest.fn(() => array(number()).default(numList).getDefault())).not.toThrow();;
+  expect(jest.fn(() => {
+    const a1 = object({
+      list: array(number().required()).required(),
+      nested: array(
+        object({
+          name: string().default(''),
+        }),
+      ),
+    })
+      .required()
+      .validateSync(undefined);
 
-  const a1 = object({
-    list: array(number().required()).required(),
-    nested: array(
-      object({
-        name: string().default(''),
-      }),
-    ),
-  })
-    .required()
-    .validateSync(undefined);
+    // $ExpectType number[]
+    a1.list;
 
-  // $ExpectType number[]
-  a1.list;
+    // $ExpectType string | undefined
+    a1.nested?.[0].name;
 
-  // $ExpectType string | undefined
-  a1.nested?.[0].name;
+    // $ExpectType string
+    a1.nested![0].name;
+  })).toThrow();
 
-  // $ExpectType string
-  a1.nested![0].name;
-
-  // $ExpectType (number | undefined)[]
-  const _c1 = array(number())
-    .concat(array(number()).required())
-    .validateSync([]);
+  expect(jest.fn(() => {
+    // $ExpectType (number | undefined)[]
+    const _c1 = array(number())
+      .concat(array(number()).required())
+      .validateSync([]);
+  })).not.toThrow();
 
   // $ExpectType { [x: string]: any; a: number; }[] | null
-  // @ts-ignore
-  const _definedArray: Array<{ a: number; }> | null = array()
-    .of(object({ a: number().required() }))
-    .nullable()
-    .defined()
-    .validateSync([]);
+  expect(jest.fn(() => {
+    // @ts-ignore
+    const _definedArray: Array<{ a: number; }> | null = array()
+      .of(object({ a: number().required() }))
+      .nullable()
+      .defined()
+      .validateSync([]);
+  })).not.toThrow();
 
   // $ExpectType { [x: string]: any; a: number; }[]
-  // @ts-ignore
-  const _requiredArray: Array<{ a: number; }> = array()
-    .of(object({ a: number().required() }))
-    .nullable()
-    .required()
-    .validateSync([]);
-}
+  expect(jest.fn(() => {
+    // @ts-ignore
+    const _requiredArray: Array<{ a: number; }> = array()
+      .of(object({ a: number().required() }))
+      .nullable()
+      .required()
+      .validateSync([]);
+  })).not.toThrow();
+});
 
-{
+describe('ExpectType 2', () => {
   // $ExpectType string | undefined
-  lazy(() => string()).cast(3);
+  expect(jest.fn(() => lazy(() => string()).cast(3))).not.toThrow();;
 
   // $ExpectType string | number | undefined
-  lazy((v) => (typeof v === 'string' ? string() : number())).cast(3);
-}
+  expect(jest.fn(() => lazy((v) => (typeof v === 'string' ? string() : number())).cast(3))).not.toThrow();;
+});
 
 //
 // CONCAT
 //
-{
+describe('Concat', () => {
   // $ExpectType string
-  mixed<string>().concat(mixed<string>().required()).validateSync('');
+  expect(jest.fn(() => mixed<string>().concat(mixed<string>().required()).validateSync(''))).not.toThrow();;
 
   // $ExpectType string | number | undefined
-  const _oo = mixed<number>()
-    .required()
-    .concat(mixed<string>())
-    .validateSync('');
+  expect(jest.fn(() => {
+    const _oo = mixed<number>()
+      .required()
+      .concat(mixed<string>())
+      .validateSync('');
+  })).not.toThrow();
 
-  const _o = object({
-    str: string(),
-  }).concat(
-    object({
-      name: string(),
-    }),
-  );
+  expect(jest.fn(() => {
+    const _o = object({
+      str: string(),
+    }).concat(
+      object({
+        name: string(),
+      }),
+    );
+  })).not.toThrow();
 
   // $ExpectType string
-  string().nullable().default('hi').concat(string()).cast('');
+  expect(jest.fn(() => string().nullable().default('hi').concat(string()).cast(''))).not.toThrow();;
 
   // $ExpectType number
-  number().nullable().default(1).concat(number()).cast('');
+  expect(jest.fn(() => number().nullable().default(1).concat(number()).cast(''))).toThrow();;
 
   // $ExpectType string | null
-  string().default('hi').concat(string().nullable()).cast('');
+  expect(jest.fn(() => string().default('hi').concat(string().nullable()).cast(''))).not.toThrow();;
 
   // $ExpectType number | null
-  number().default(0).concat(number().nullable()).cast('');
-}
+  expect(jest.fn(() => number().default(0).concat(number().nullable()).cast(''))).toThrow();;
+});
 
 // Context: {
 //   type Context = { isCool: boolean };
