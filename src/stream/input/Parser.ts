@@ -43,13 +43,13 @@ export const KEY = C.KEY = 0x72;
 export const OBJECT = C.OBJECT = 0x81;
 export const ARRAY = C.ARRAY = 0x82;
 // Character constants
-const BACK_SLASH = "\\".charCodeAt(0);
-const FORWARD_SLASH = "\/".charCodeAt(0);
-const BACKSPACE = "\b".charCodeAt(0);
-const FORM_FEED = "\f".charCodeAt(0);
-const NEWLINE = "\n".charCodeAt(0);
-const CARRIAGE_RETURN = "\r".charCodeAt(0);
-const TAB = "\t".charCodeAt(0);
+const BACK_SLASH = '\\'.charCodeAt(0);
+const FORWARD_SLASH = '\/'.charCodeAt(0);
+const BACKSPACE = '\b'.charCodeAt(0);
+const FORM_FEED = '\f'.charCodeAt(0);
+const NEWLINE = '\n'.charCodeAt(0);
+const CARRIAGE_RETURN = '\r'.charCodeAt(0);
+const TAB = '\t'.charCodeAt(0);
 
 const STRING_BUFFER_SIZE = 64 * 1024;
 
@@ -69,7 +69,7 @@ export default class Parser {
       const key = keys[i];
       if (C[key] === code) { return key; }
     }
-    return code && ("0x" + code.toString(16));
+    return code && ('0x' + code.toString(16));
   }
 
   tState = START;
@@ -87,7 +87,7 @@ export default class Parser {
   state: any = VALUE;
   bytes_remaining = 0; // number of bytes remaining in multi byte utf8 char to read after split boundary
   bytes_in_sequence = 0; // bytes in multi byte utf8 char to read
-  temp_buffs: any = { "2": alloc(2), "3": alloc(3), "4": alloc(4) }; // for rebuilding chars split before boundary is reached
+  temp_buffs: any = { '2': alloc(2), '3': alloc(3), '4': alloc(4) }; // for rebuilding chars split before boundary is reached
 
   // Stream offset
   offset = -1;
@@ -97,11 +97,11 @@ export default class Parser {
   constructor() {
   }
 
-  pipe(data: string | Buffer) {
-    return this.write(typeof data === "string" ? Buffer.from(data) : data);
+  public pipe(data: string | Buffer) {
+    return this.write(typeof data === 'string' ? Buffer.from(data) : data);
   }
 
-  appendStringBuf(buf: any, start?: number, end?: number) {
+  private appendStringBuf(buf: any, start?: number, end?: number) {
     let size = buf.length;
     if (typeof start === 'number') {
       if (typeof end === 'number') {
@@ -129,7 +129,7 @@ export default class Parser {
     this.stringBufferOffset += size;
   }
 
-  appendStringChar(char: any) {
+  private appendStringChar(char: any) {
     if (this.stringBufferOffset >= STRING_BUFFER_SIZE) {
       this.string += this.stringBuffer.toString('utf8');
       this.stringBufferOffset = 0;
@@ -138,19 +138,19 @@ export default class Parser {
     this.stringBuffer[this.stringBufferOffset++] = char;
   }
 
-  charError(buffer: any, i: any) {
+  private charError(buffer: any, i: any) {
     this.tState = STOP;
-    this.onError(new Error("Unexpected " + JSON.stringify(String.fromCharCode(buffer[i])) + " at position " + i + " in state " + Parser.toknam(this.tState)));
+    this.onError(new Error('Unexpected ' + JSON.stringify(String.fromCharCode(buffer[i])) + ' at position ' + i + ' in state ' + Parser.toknam(this.tState)));
   }
 
-  emit(value: any) {
+  private emit(value: any) {
     if (this.mode) { this.state = COMMA; }
     this.onValue(value);
   }
 
   // Override to implement your own number reviver.
   // Any value returned is treated as error and will interrupt parsing.
-  numberReviver(text: any, buffer: any, i: any): any {
+  private numberReviver(text: any, buffer: any, i: any): any {
     const result = Number(text);
 
     if (isNaN(result)) {
@@ -165,9 +165,9 @@ export default class Parser {
     }
   }
 
-  onError(err: any) { throw err; }
+  private onError(err: any) { throw err; }
   
-  onToken(token: any, value: any) {
+  private onToken(token: any, value: any) {
     // detect root is an object or an array
     if (this.stack.length === 0) {
       if (token === LEFT_BRACE) {
@@ -245,7 +245,7 @@ export default class Parser {
     }
   }
 
-  onValue(value: SimpleType) {
+  private onValue(value: SimpleType) {
     if (this.stack.length === 1) {
       if (!isUndefined(this.key)) {
         this.tuples.push([this.key, value]);
@@ -262,12 +262,12 @@ export default class Parser {
     }
   }
 
-  parseError(token: any, value: any) {
+  private parseError(token: any, value: any) {
     this.tState = STOP;
-    this.onError(new Error("Unexpected " + Parser.toknam(token) + (value ? ("(" + JSON.stringify(value) + ")") : "") + " in state " + Parser.toknam(this.state)));
+    this.onError(new Error('Unexpected ' + Parser.toknam(token) + (value ? ('(' + JSON.stringify(value) + ')') : '') + ' in state ' + Parser.toknam(this.state)));
   }
 
-  pop() {
+  private pop() {
     const value = this.value;
     const parent = this.stack.pop();
     this.value = parent.value;
@@ -277,40 +277,40 @@ export default class Parser {
     if (!this.mode) { this.state = VALUE; }
   }
 
-  push() {
+  private push() {
     this.stack.push({ value: this.value, key: this.key, mode: this.mode });
   }
 
-  write(buffer: Buffer) {
+  private write(buffer: Buffer) {
     let n;
     for (let i = 0, l = buffer.length; i < l; i++) {
       if (this.tState === START) {
         n = buffer[i];
         this.offset++;
         if (n === 0x7b) {
-          this.onToken(LEFT_BRACE, "{"); // {
+          this.onToken(LEFT_BRACE, '{'); // {
         } else if (n === 0x7d) {
-          this.onToken(RIGHT_BRACE, "}"); // }
+          this.onToken(RIGHT_BRACE, '}'); // }
         } else if (n === 0x5b) {
-          this.onToken(LEFT_BRACKET, "["); // [
+          this.onToken(LEFT_BRACKET, '['); // [
         } else if (n === 0x5d) {
-          this.onToken(RIGHT_BRACKET, "]"); // ]
+          this.onToken(RIGHT_BRACKET, ']'); // ]
         } else if (n === 0x3a) {
-          this.onToken(COLON, ":");  // :
+          this.onToken(COLON, ':');  // :
         } else if (n === 0x2c) {
-          this.onToken(COMMA, ","); // ,
+          this.onToken(COMMA, ','); // ,
         } else if (n === 0x74) {
           this.tState = TRUE1;  // t
         } else if (n === 0x66) {
           this.tState = FALSE1;  // f
         } else if (n === 0x6e) {
           this.tState = NULL1; // n
-        } else if (n === 0x22) { // "
-          this.string = "";
+        } else if (n === 0x22) { // '
+          this.string = '';
           this.stringBufferOffset = 0;
           this.tState = STRING1;
         } else if (n === 0x2d) {
-          this.string = "-"; this.tState = NUMBER1; // -
+          this.string = '-'; this.tState = NUMBER1; // -
         } else {
           if (n >= 0x30 && n < 0x40) { // 1-9
             this.string = String.fromCharCode(n); this.tState = NUMBER3;
@@ -335,7 +335,7 @@ export default class Parser {
           i = i + j - 1;
         } else if (this.bytes_remaining === 0 && n >= 128) { // else if no remainder bytes carried over, parse multi byte (>=128) chars one at a time
           if (n <= 193 || n > 244) {
-            return this.onError(new Error("Invalid UTF-8 character at position " + i + " in state " + Parser.toknam(this.tState)));
+            return this.onError(new Error('Invalid UTF-8 character at position ' + i + ' in state ' + Parser.toknam(this.tState)));
           }
           if ((n >= 194) && (n <= 223)) this.bytes_in_sequence = 2;
           if ((n >= 224) && (n <= 239)) this.bytes_in_sequence = 3;
@@ -384,7 +384,7 @@ export default class Parser {
         } else if (n === 0x74) {
           this.appendStringChar(TAB); this.tState = STRING1;
         } else if (n === 0x75) {
-          this.unicode = ""; this.tState = STRING3;
+          this.unicode = ''; this.tState = STRING3;
         } else {
           return this.charError(buffer, i);
         }
