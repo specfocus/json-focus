@@ -59,6 +59,15 @@ function alloc(size: number) {
 
 export type Tuple = [number | string, SimpleType];
 
+export interface YieldValue {
+  type: 'partial' | 'root' | 'entry';
+}
+
+export interface ReturnError {
+  type: 'error';
+  message?: string;
+}
+
 export default class Parser {
   static C = C;
 
