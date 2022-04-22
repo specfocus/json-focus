@@ -1,6 +1,6 @@
-import isSchema from './util/isSchema';
+import isSchema from './validate/isSchema';
 import Reference from './reference';
-import { SchemaLike } from './types';
+import { SchemaLike } from './validate/types';
 
 export interface ConditionBuilder<T extends SchemaLike> {
   (this: T, value: any, schema: T): SchemaLike;

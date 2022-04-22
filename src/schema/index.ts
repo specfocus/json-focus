@@ -3,7 +3,7 @@ import BooleanSchema, { create as boolCreate } from './boolean';
 import StringSchema, { create as stringCreate } from './string';
 import NumberSchema, { create as numberCreate } from './number';
 import DateSchema, { create as dateCreate } from './date';
-import ObjectSchema, { AnyObject, create as objectCreate } from './shape';
+import ObjectSchema, { create as objectCreate } from './object';
 import ArraySchema, { create as arrayCreate } from './array';
 import { create as refCreate } from './reference';
 import Lazy, { create as lazyCreate } from './lazy';
@@ -14,6 +14,7 @@ import setLocale from './validate/setLocale';
 import BaseSchema, { AnySchema } from './base';
 import type { TypeOf, Asserts, Config } from './base';
 import { Maybe } from '@specfocus/main-focus/src/maybe';
+import { AnyObject } from '@specfocus/main-focus/src/object';
 
 function addMethod<T extends AnySchema>(
   schemaType: (...arg: any[]) => T,

@@ -1,4 +1,4 @@
-import type { Tuple } from './any';
+import type { Tuple } from '../any';
 import type { ArrayType } from './array';
 import type { JsonSchema, JsonType } from './json';
 import type { Nullable } from './nullable';

@@ -1,13 +1,13 @@
-import type { Any, Array as SimpleArray, Shape, Tuple } from './any';
+import type { Any, Array as SimpleArray, Shape, Tuple } from '../any';
 import type { ArrayJsonSchema } from './array';
 import { ARRAY_TYPE } from './array';
-import type { BooleanJsonSchema } from './bool';
-import { BOOLEAN_TYPE } from './bool';
+import type { BooleanJsonSchema } from './boolean';
+import { BOOLEAN_TYPE } from './boolean';
 import { NullableJsonSchema, NULL_TYPE } from './nullable';
-import type { NumericJsonSchema } from './numeric';
-import { INTEGER_TYPE, NUMBER_TYPE } from './numeric';
-import type { ObjectJsonSchema } from './shape';
-import { OBJECT_TYPE } from './shape';
+import type { NumberJsonSchema } from './number';
+import { INTEGER_TYPE, NUMBER_TYPE } from './number';
+import type { ObjectJsonSchema } from './object';
+import { OBJECT_TYPE } from './object';
 import type { StringJsonSchema } from './string';
 import { STRING_TYPE } from './string';
 import type { TupleJsonSchema } from './tuple';
@@ -34,10 +34,8 @@ export declare type JsonType<T extends string, _partial extends boolean> = _part
 
 export declare type SomeJsonSchema = JsonSchema<Any, true>;
 
-export declare type PartialJsonSchema<T> = Partial<JsonSchema<T, true>>;
-
 export declare type JsonSchema<T, _partial extends boolean = false> = (
-  T extends number ? NumericJsonSchema<_partial>
+  T extends number ? NumberJsonSchema<_partial>
   : T extends string ? StringJsonSchema<_partial>
   : T extends boolean ? BooleanJsonSchema
   : T extends Tuple ? TupleJsonSchema<T, _partial>

@@ -1,12 +1,11 @@
 import { Maybe, Preserve } from '@specfocus/main-focus/src/maybe';
-import ReferenceSet from '@specfocus/main-focus/src/model/util/ReferenceSet';
 // @ts-ignore
 import cloneDeep from 'nanoclone';
-import { Any } from './any';
+import { Any } from '../any';
 import Condition, { ConditionOptions, ResolveOptions } from './condition';
 import { ValidationError } from './validate/error';
 import Lazy from './lazy';
-import { default as Ref, default as Reference } from './reference';
+import { ReferenceSet, default as Ref, default as Reference } from './reference';
 import createValidation, { Test, TestConfig, TestFunction } from './validate/createValidation';
 import isAbsent from './validate/isAbsent';
 import { mixed as locale } from './validate/locale';
