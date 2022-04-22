@@ -166,7 +166,7 @@ export default class Parser {
   }
 
   private onError(err: any) { throw err; }
-  
+
   private onToken(token: any, value: any) {
     // detect root is an object or an array
     if (this.stack.length === 0) {
@@ -289,37 +289,48 @@ export default class Parser {
         this.offset++;
         if (n === 0x7b) {
           this.onToken(LEFT_BRACE, '{'); // {
+          continue;
         } else if (n === 0x7d) {
           this.onToken(RIGHT_BRACE, '}'); // }
+          continue;
         } else if (n === 0x5b) {
           this.onToken(LEFT_BRACKET, '['); // [
+          continue;
         } else if (n === 0x5d) {
           this.onToken(RIGHT_BRACKET, ']'); // ]
+          continue;
         } else if (n === 0x3a) {
           this.onToken(COLON, ':');  // :
+          continue;
         } else if (n === 0x2c) {
           this.onToken(COMMA, ','); // ,
+          continue;
         } else if (n === 0x74) {
           this.tState = TRUE1;  // t
+          continue;
         } else if (n === 0x66) {
           this.tState = FALSE1;  // f
+          continue;
         } else if (n === 0x6e) {
           this.tState = NULL1; // n
+          continue;
         } else if (n === 0x22) { // '
           this.string = '';
           this.stringBufferOffset = 0;
           this.tState = STRING1;
+          continue;
         } else if (n === 0x2d) {
           this.string = '-'; this.tState = NUMBER1; // -
-        } else {
-          if (n >= 0x30 && n < 0x40) { // 1-9
-            this.string = String.fromCharCode(n); this.tState = NUMBER3;
-          } else if (n === 0x20 || n === 0x09 || n === 0x0a || n === 0x0d) {
-            // whitespace
-          } else {
-            return this.charError(buffer, i);
-          }
+          continue;
         }
+        if (n >= 0x30 && n < 0x40) { // 1-9
+          this.string = String.fromCharCode(n); this.tState = NUMBER3;
+        } else if (n === 0x20 || n === 0x09 || n === 0x0a || n === 0x0d) {
+          // whitespace
+        } else {
+          return this.charError(buffer, i);
+        }
+        continue;
       } else if (this.tState === STRING1) { // After open quote
         n = buffer[i]; // get current byte from buffer
         // check for carry over of a multi byte char split between data chunks
@@ -333,6 +344,7 @@ export default class Parser {
           this.appendStringBuf(this.temp_buffs[this.bytes_in_sequence]);
           this.bytes_in_sequence = this.bytes_remaining = 0;
           i = i + j - 1;
+          continue;
         } else if (this.bytes_remaining === 0 && n >= 128) { // else if no remainder bytes carried over, parse multi byte (>=128) chars one at a time
           if (n <= 193 || n > 244) {
             return this.onError(new Error('Invalid UTF-8 character at position ' + i + ' in state ' + Parser.toknam(this.tState)));
@@ -350,6 +362,7 @@ export default class Parser {
             this.appendStringBuf(buffer, i, i + this.bytes_in_sequence);
             i = i + this.bytes_in_sequence - 1;
           }
+          continue;
         } else if (n === 0x22) {
           this.tState = START;
           this.string += this.stringBuffer.toString('utf8', 0, this.stringBufferOffset);
@@ -357,15 +370,19 @@ export default class Parser {
           this.onToken(STRING, this.string);
           this.offset += Buffer.byteLength(this.string, 'utf8') + 1;
           this.string = undefined;
+          continue;
         }
         else if (n === 0x5c) {
           this.tState = STRING2;
+          continue;
         }
-        else if (n >= 0x20) { this.appendStringChar(n); }
-        else {
-          return this.charError(buffer, i);
+        else if (n >= 0x20) {
+          this.appendStringChar(n);
+          continue;
         }
-      } else if (this.tState === STRING2) { // After backslash
+        return this.charError(buffer, i);
+      }
+      if (this.tState === STRING2) { // After backslash
         n = buffer[i];
         if (n === 0x22) {
           this.appendStringChar(n); this.tState = STRING1;
@@ -388,7 +405,9 @@ export default class Parser {
         } else {
           return this.charError(buffer, i);
         }
-      } else if (this.tState === STRING3 || this.tState === STRING4 || this.tState === STRING5 || this.tState === STRING6) { // unicode hex codes
+        continue;
+      }
+      if (this.tState === STRING3 || this.tState === STRING4 || this.tState === STRING5 || this.tState === STRING6) { // unicode hex codes
         n = buffer[i];
         // 0-9 A-F a-f
         if ((n >= 0x30 && n < 0x40) || (n > 0x40 && n <= 0x46) || (n > 0x60 && n <= 0x66)) {
@@ -410,10 +429,11 @@ export default class Parser {
             }
             this.tState = STRING1;
           }
-        } else {
-          return this.charError(buffer, i);
+          continue;
         }
-      } else if (this.tState === NUMBER1 || this.tState === NUMBER3) {
+        return this.charError(buffer, i);
+      }
+      if (this.tState === NUMBER1 || this.tState === NUMBER3) {
         n = buffer[i];
 
         switch (n) {
@@ -447,36 +467,77 @@ export default class Parser {
             i--;
             break;
         }
-      } else if (this.tState === TRUE1) { // r
-        if (buffer[i] === 0x72) { this.tState = TRUE2; }
-        else { return this.charError(buffer, i); }
-      } else if (this.tState === TRUE2) { // u
-        if (buffer[i] === 0x75) { this.tState = TRUE3; }
-        else { return this.charError(buffer, i); }
-      } else if (this.tState === TRUE3) { // e
-        if (buffer[i] === 0x65) { this.tState = START; this.onToken(TRUE, true); this.offset += 3; }
-        else { return this.charError(buffer, i); }
-      } else if (this.tState === FALSE1) { // a
-        if (buffer[i] === 0x61) { this.tState = FALSE2; }
-        else { return this.charError(buffer, i); }
-      } else if (this.tState === FALSE2) { // l
-        if (buffer[i] === 0x6c) { this.tState = FALSE3; }
-        else { return this.charError(buffer, i); }
-      } else if (this.tState === FALSE3) { // s
-        if (buffer[i] === 0x73) { this.tState = FALSE4; }
-        else { return this.charError(buffer, i); }
-      } else if (this.tState === FALSE4) { // e
-        if (buffer[i] === 0x65) { this.tState = START; this.onToken(FALSE, false); this.offset += 4; }
-        else { return this.charError(buffer, i); }
-      } else if (this.tState === NULL1) { // u
-        if (buffer[i] === 0x75) { this.tState = NULL2; }
-        else { return this.charError(buffer, i); }
-      } else if (this.tState === NULL2) { // l
-        if (buffer[i] === 0x6c) { this.tState = NULL3; }
-        else { return this.charError(buffer, i); }
-      } else if (this.tState === NULL3) { // l
-        if (buffer[i] === 0x6c) { this.tState = START; this.onToken(NULL, null); this.offset += 3; }
-        else { return this.charError(buffer, i); }
+        continue;
+      }
+      if (this.tState === TRUE1) { // r
+        if (buffer[i] === 0x72) {
+          this.tState = TRUE2;
+          continue;
+        }
+        return this.charError(buffer, i);
+      }
+      if (this.tState === TRUE2) { // u
+        if (buffer[i] === 0x75) { this.tState = TRUE3;
+          continue; }
+        return this.charError(buffer, i);
+      }
+      if (this.tState === TRUE3) { // e
+        if (buffer[i] === 0x65) {
+          this.tState = START;
+          this.onToken(TRUE, true);
+          this.offset += 3;
+          continue;
+        }
+        return this.charError(buffer, i);
+      }
+      if (this.tState === FALSE1) { // a
+        if (buffer[i] === 0x61) {
+          this.tState = FALSE2;
+          continue;
+        }
+        return this.charError(buffer, i);
+      }
+      if (this.tState === FALSE2) { // l
+        if (buffer[i] === 0x6c) {
+          this.tState = FALSE3;
+          continue;
+        }
+        return this.charError(buffer, i);
+      }
+      if (this.tState === FALSE3) { // s
+        if (buffer[i] === 0x73) {
+          this.tState = FALSE4;
+          continue;
+        }
+        return this.charError(buffer, i);
+      }
+      if (this.tState === FALSE4) { // e
+        if (buffer[i] === 0x65) { this.tState = START; this.onToken(FALSE, false); this.offset += 4; continue; }
+        return this.charError(buffer, i);
+      }
+      if (this.tState === NULL1) { // u
+        if (buffer[i] === 0x75) {
+          this.tState = NULL2;
+          continue;
+        }
+        return this.charError(buffer, i);
+      }
+      if (this.tState === NULL2) { // l
+        if (buffer[i] === 0x6c) {
+          this.tState = NULL3;
+          continue;
+        }
+        return this.charError(buffer, i);
+      }
+      if (this.tState === NULL3) { // l
+        if (buffer[i] === 0x6c) {
+          this.tState = START;
+          this.onToken(NULL, null);
+          this.offset += 3;
+          continue;
+        }
+        return this.charError(buffer, i);
+        
       }
     }
   }
