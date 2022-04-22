@@ -441,7 +441,7 @@ export default class Parser {
 
           this.appendStringBuf(this.temp_buffs[this.bytes_in_sequence]);
           this.bytes_in_sequence = this.bytes_remaining = 0;
-          nextIndex = i + j - 1;
+          nextIndex = i + j;
           return { value: { type: 'partial' }, done: false };
         }
         if (this.bytes_remaining === 0 && n >= 128) { // else if no remainder bytes carried over, parse multi byte (>=128) chars one at a time
@@ -456,10 +456,10 @@ export default class Parser {
               this.temp_buffs[this.bytes_in_sequence][k] = buffer[i + k]; // fill temp buffer of correct size with bytes available in this chunk
             }
             this.bytes_remaining = (i + this.bytes_in_sequence) - buffer.length;
-            nextIndex = buffer.length - 1;
+            nextIndex = buffer.length;
           } else {
             this.appendStringBuf(buffer, i, i + this.bytes_in_sequence);
-            nextIndex = i + this.bytes_in_sequence - 1;
+            nextIndex = i + this.bytes_in_sequence;
           }
           return { value: { type: 'partial' }, done: false };
         }
