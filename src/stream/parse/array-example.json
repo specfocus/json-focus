@@ -1,0 +1,12 @@
+[
+  { "name": "Lucas" },
+  { "last": "Oromi", "age": 44 },
+  [
+    "this is a good time to be alive",
+    77,
+    true,
+    false,
+    234234.3434
+  ],
+  4545.433
+]
