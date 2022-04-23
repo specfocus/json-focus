@@ -250,7 +250,6 @@ export default class Tokenizer {
         this.state = KEY;
         this.mode = OBJECT;
         if (this.stack.length === 1) {
-          console.log('MAP', JSON.stringify(this.stack));
           return { value: { type: 'shape' }, done: false };
         }
         return result;
@@ -266,7 +265,6 @@ export default class Tokenizer {
         this.mode = ARRAY;
         this.state = VALUE;
         if (this.stack.length === 1) {
-          console.log('ARRAY', JSON.stringify(this.stack));
           return { value: { type: 'array' }, done: false };
         }
         return result;
