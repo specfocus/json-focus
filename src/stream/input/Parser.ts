@@ -343,7 +343,7 @@ export default class Parser {
         console.log('OUT TOO SOON', { nextIndex, l });
         return { value: null, done: true };
       }
-      let i = nextIndex;
+      const i = nextIndex;
       console.log('>', i, 'x', this.tState.toString(16), '-', buffer.toString().substring(i));
       nextIndex++;
       if (this.tState === START) {
@@ -594,7 +594,7 @@ export default class Parser {
 
             this.offset += this.string.length - 1;
             this.string = undefined;
-            i--;
+            nextIndex--;
             break;
         }
         return { value: { type: 'partial' }, done: false };
