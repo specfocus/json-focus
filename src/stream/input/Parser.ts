@@ -292,7 +292,10 @@ export default class Parser {
 
   private write(buffer: Buffer) {
     let n, i = 0, l = buffer.length;
+    let nextIndex = 0;
     const next = () => {
+      const i = nextIndex;
+      nextIndex++;
       if (this.tState === START) {
         n = buffer[i];
         this.offset++;
@@ -352,7 +355,7 @@ export default class Parser {
 
           this.appendStringBuf(this.temp_buffs[this.bytes_in_sequence]);
           this.bytes_in_sequence = this.bytes_remaining = 0;
-          i = i + j - 1;
+          nextIndex = i + j;
           return;
         } else if (this.bytes_remaining === 0 && n >= 128) { // else if no remainder bytes carried over, parse multi byte (>=128) chars one at a time
           if (n <= 193 || n > 244) {
@@ -366,10 +369,10 @@ export default class Parser {
               this.temp_buffs[this.bytes_in_sequence][k] = buffer[i + k]; // fill temp buffer of correct size with bytes available in this chunk
             }
             this.bytes_remaining = (i + this.bytes_in_sequence) - buffer.length;
-            i = buffer.length - 1;
+            nextIndex = buffer.length;
           } else {
             this.appendStringBuf(buffer, i, i + this.bytes_in_sequence);
-            i = i + this.bytes_in_sequence - 1;
+            nextIndex = i + this.bytes_in_sequence;
           }
           return;
         } else if (n === 0x22) {
@@ -473,7 +476,7 @@ export default class Parser {
 
             this.offset += this.string.length - 1;
             this.string = undefined;
-            i--;
+            nextIndex--;
             break;
         }
         return;
@@ -549,7 +552,7 @@ export default class Parser {
         
       }
     }
-    for (; i < l; i++) {
+    for (; nextIndex < l; i++) {
       next();
     }
   }
