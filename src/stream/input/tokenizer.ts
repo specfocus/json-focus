@@ -132,8 +132,12 @@ export default class Tokenizer {
   // Stream offset
   offset = -1;
 
+  constructor() {
+    this.parse = this.parse.bind(this);
+  }
+
   tokenize(data: string | Buffer): Iterable<Token> {
-    const parse = this.parse.bind(this);
+    const parse = this.parse;
     function* generator(): Generator<Token, Token> {
       const it = parse(typeof data === 'string' ? Buffer.from(data) : data);
       let result = it.next();
