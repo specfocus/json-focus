@@ -1,2 +1,2 @@
 export { default as iterate } from './iterate';
-export { default as Parser } from './parser';
+export { default as Tokenizer } from './tokenizer';

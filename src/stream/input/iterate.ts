@@ -1,7 +1,7 @@
-import Parser from './parser';
+import Tokenizer, { Token } from './tokenizer';
 
-async function* generator(source: AsyncIterable<string | Buffer>): AsyncGenerator<any> {
-  const parser = new Parser();
+async function* generator(source: AsyncIterable<string | Buffer>): AsyncGenerator<Token> {
+  const parser = new Tokenizer();
   for await (const fragment of source) {
     for (const token of parser.tokenize(fragment)) {
       if (token.type === 'error') {

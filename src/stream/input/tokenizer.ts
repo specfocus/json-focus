@@ -1,6 +1,4 @@
-import { isUndefined } from '@specfocus/main-focus/src/maybe';
 import { SimpleType } from '@specfocus/main-focus/src/object';
-import { Any } from 'any';
 
 // Named constants with unique integer values
 const C: Record<string, number> = {};
@@ -83,8 +81,8 @@ interface ItemToken {
   value: SimpleType;
 }
 
-interface MapToken {
-  type: 'map';
+interface ShapeToken {
+  type: 'shape';
 }
 
 interface ValueToken {
@@ -98,10 +96,10 @@ export type Token =
   | EntryToken
   | ErrorToken
   | ItemToken
-  | MapToken // root is an object
+  | ShapeToken // root is an object
   | ValueToken; // root is a value
 
-export default class Parser {
+export default class Tokenizer {
   static C = C;
 
   // Slow code to string converter (only used when throwing syntax errors)
@@ -191,7 +189,7 @@ export default class Parser {
 
   private charError(buffer: any, i: any): IteratorResult<Token, Token> {
     this.tState = STOP;
-    const error = 'Unexpected ' + JSON.stringify(String.fromCharCode(buffer[i])) + ' at position ' + i + ' in state ' + Parser.toknam(this.tState);
+    const error = 'Unexpected ' + JSON.stringify(String.fromCharCode(buffer[i])) + ' at position ' + i + ' in state ' + Tokenizer.toknam(this.tState);
     /*
     try {
       throw error;
@@ -253,7 +251,7 @@ export default class Parser {
         this.mode = OBJECT;
         if (this.stack.length === 1) {
           console.log('MAP', JSON.stringify(this.stack));
-          return { value: { type: 'map' }, done: false };
+          return { value: { type: 'shape' }, done: false };
         }
         return result;
       }
@@ -328,7 +326,7 @@ export default class Parser {
               Object.assign(result.value, { type: 'entry', value, key: this.key });
               break;
             case ARRAY:
-              Object.assign(result.value, { type: 'item', value, key: this.key });
+              Object.assign(result.value, { type: 'item', value, index: this.key });
               break;
           }
         }
@@ -340,7 +338,7 @@ export default class Parser {
 
   private parseError(token: any, value: any): IteratorResult<Token, Token> {
     this.tState = STOP;
-    const error = 'Unexpected ' + Parser.toknam(token) + (value ? ('(' + JSON.stringify(value) + ')') : '') + ' in state ' + Parser.toknam(this.state);
+    const error = 'Unexpected ' + Tokenizer.toknam(token) + (value ? ('(' + JSON.stringify(value) + ')') : '') + ' in state ' + Tokenizer.toknam(this.state);
     /*
     try {
       throw new Error(error);
@@ -447,7 +445,7 @@ export default class Parser {
         }
         if (this.bytes_remaining === 0 && n >= 128) { // else if no remainder bytes carried over, parse multi byte (>=128) chars one at a time
           if (n <= 193 || n > 244) {
-            return { value: { type: 'error', message: 'Invalid UTF-8 character at position ' + i + ' in state ' + Parser.toknam(this.tState) }, done: true };
+            return { value: { type: 'error', message: 'Invalid UTF-8 character at position ' + i + ' in state ' + Tokenizer.toknam(this.tState) }, done: true };
           }
           if ((n >= 194) && (n <= 223)) this.bytes_in_sequence = 2;
           if ((n >= 224) && (n <= 239)) this.bytes_in_sequence = 3;

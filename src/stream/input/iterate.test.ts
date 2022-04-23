@@ -2,7 +2,7 @@ import { isArray } from '@specfocus/main-focus/src/array';
 import { isAsyncIterable } from '@specfocus/main-focus/src/iterable';
 import { isUndefined } from '@specfocus/main-focus/src/maybe';
 import { SimpleType } from '@specfocus/main-focus/src/object';
-import parser from './iterate';
+import iterate from './iterate';
 
 const array = [
   { "name": "Lucas" },
@@ -62,7 +62,7 @@ describe('Async JSON Perser', () => {
   });
 });
 
-async function* generate(test: string): AsyncGenerator<string, void, any> {
+async function* fakeAsync(test: string): AsyncGenerator<string, void, any> {
   let index = 0;
   for (index = 0; index < test.length; index++) {
     const len = 5 + Math.random() * 10;
@@ -72,28 +72,27 @@ async function* generate(test: string): AsyncGenerator<string, void, any> {
   }
 }
 
-const test = async (test: string): Promise<Array<SimpleType>> => {
+const test = async (json: string): Promise<Array<SimpleType>> => {
   let result: any;
-  const iterable = generate(test);
-  if (isAsyncIterable(iterable)) {
-    const iterable2 = parser(iterable);
-    for await (const part of iterable2) {
-      console.log(part);
-      switch (part.type) {
+  const asyncIterable = fakeAsync(json);
+  if (isAsyncIterable(asyncIterable)) {
+    const tokens = iterate(asyncIterable);
+    for await (const token of tokens) {
+      switch (token.type) {
         case 'array':
           result = [];
           break;
         case 'entry':
-          Object.assign(result, { [part.key]: part.value });
+          result[token.key] = token.value;
           break;
         case 'item':
-          result.push(part.value);
+          result[token.index] = token.value;
           break;
-        case 'map':
+        case 'shape':
           result = {};
           break;
         case 'value':
-          result = part.value;
+          result = token.value;
       }
     }
   }
