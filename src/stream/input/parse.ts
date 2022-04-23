@@ -15,8 +15,9 @@ async function* generator(source: AsyncIterable<string>): AsyncGenerator<any> {
     throw e;
   } finally {
     if (parser.string && parser.string.length) {
-      if (!Number.isNaN(Number(parser.string))) {
-        yield { type: 'value', value: Number(parser.string) };
+      const value = Number(parser.string);
+      if (!Number.isNaN(value)) {
+        yield { type: 'value', value };
       }
     }
   }

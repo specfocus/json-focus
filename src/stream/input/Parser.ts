@@ -209,15 +209,15 @@ export default class Parser {
         }
         this.emit(value);
         if (this.stack.length === 0) {
-          console.log(this.stack.length, 'VALUE!!', value);
           //@ts-ignore
           return { value: { type: 'value', value }, done: false };
         }
         if (this.stack.length === 1) {
-          if (typeof this.key === 'string') {
-            return { value: { type: 'entry', value, key: this.key }, done: false };
-          } else {
-            return { value: { type: 'item', value }, done: false };
+          switch (this.mode) {
+            case ARRAY:
+              return { value: { type: 'item', value }, done: false };
+            case OBJECT:
+              return { value: { type: 'entry', value, key: this.key }, done: false };
           }
         }
         return { value: { type: 'partial', value }, done: false };
@@ -302,11 +302,11 @@ export default class Parser {
         const value = this.value;
         this.pop();
         if (this.stack.length === 1) {
-          switch (typeof this.key) {
-            case 'string':
+          switch (this.mode) {
+            case OBJECT:
               Object.assign(result.value, { type: 'entry', value, key: this.key });
               break;
-            case 'number':
+            case ARRAY:
               Object.assign(result.value, { type: 'item', value, key: this.key });
               break;
           }

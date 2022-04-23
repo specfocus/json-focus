@@ -48,21 +48,16 @@ describe('Async JSON Perser', () => {
 
   it('should parse boolean', async () => {
     const output = await test(JSON.stringify(true));
-    console.log(JSON.stringify(output));
     expect(output).toEqual(true);
   });
 
   it('should parse array', async () => {
     const output = await test(JSON.stringify(array));
-    console.log(JSON.stringify(JSON.stringify(output)));
-    // expect(output).toEqual([[], [{ name: 'Lucas' }, 0], [{ last: 'Oromi', age: 44 }, 1]]);
     expect(output).toEqual(array);
   });
 
   it('should parse object', async () => {
     const output = await test(JSON.stringify(json));
-    console.log(JSON.stringify(JSON.stringify(output)));
-    // expect(output).toEqual([{}, ['Lucas', 'first-name'], ['Oromi', 'last-name']]);
     expect(output).toEqual(json);
   });
 });
