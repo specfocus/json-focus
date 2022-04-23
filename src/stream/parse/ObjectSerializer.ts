@@ -1,6 +1,5 @@
 import { Through } from '@specfocus/main-focus/src/through';
 import { Stream, Transform, TransformOptions } from 'stream';
-import { basename } from 'path/posix';
 
 export class ObjectSerializer {
   stream: Through;

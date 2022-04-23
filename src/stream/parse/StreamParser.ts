@@ -1,9 +1,9 @@
-import { Parser } from './Parser';
+import Tokenizer, { Token } from '../input/tokenizer';
 import { Through } from '@specfocus/main-focus/src/through';
 import { Stream, Transform, TransformOptions } from 'stream';
-import { basename } from 'path/posix';
+import check from './check';
 
-export class StreamParser extends Parser {
+export class StreamParser extends Tokenizer {
   stream: Through;
   root?: any;
   header?: any;
@@ -30,13 +30,19 @@ export class StreamParser extends Parser {
     this.stream = new Through(this.transform, this.flush);
   }
 
-  transform(chunk: any, encoding: BufferEncoding, callback: (error?: Error, data?: any) => void): void {
-    if (typeof chunk === 'string') chunk = Buffer.from(chunk)
-    this.write(chunk);
-    callback();
+  transform(chunk: string | Buffer, encoding: BufferEncoding, callback: (error?: Error, data?: Token) => void): void {
+    if (typeof chunk === 'string') chunk = Buffer.from(chunk);
+    const tokens = this.tokenize(chunk);
+    for (const token of tokens) {
+      if (token.type === 'error') {
+        callback(new Error(token.message ), token);
+      } else {
+        callback(undefined, token);
+      }
+    }
   }
 
-  flush(callback: (error?: Error, data?: any) => void): void {
+  flush(callback: (error?: Error, data?: Token) => void): void {
     if (this.header) {
       this.stream.emit('header', this.header);
     }
@@ -44,7 +50,7 @@ export class StreamParser extends Parser {
       this.stream.emit('footer', this.footer);
     }
 
-    if (this.tState !== Parser.C.START || this.stack.length > 0) {
+    if (this.tState !== Tokenizer.C.START || this.stack.length > 0) {
       callback(new Error('Incomplete JSON'))
       return
     }
@@ -127,31 +133,8 @@ export class StreamParser extends Parser {
     for (const k in this.stack) if (!Object.isFrozen(this.stack[k])) this.stack[k].value = null
   }
 
-  _onToken = super.onToken
-
-  onToken(token: any, value: any) {
-    super.onToken(token, value)
-    if (this.stack.length === 0) {
-      if (this.stream.root) {
-        if (!this.path) {
-          this.stream.push(this.stream.root)
-        }
-        this.count = 0
-        this.stream.root = null
-      }
-    }
-  }
-
   onError(err: any) {
     if (err.message.indexOf('at position') > -1) err.message = 'Invalid JSON (' + err.message + ')'
     this.stream.destroy(err)
   }
-}
-
-function check(x: any, y: any): any {
-  if ('string' === typeof x) return y == x
-  else if (x && 'function' === typeof x.exec) return x.exec(y)
-  else if ('boolean' === typeof x || 'object' === typeof x) return x
-  else if ('function' === typeof x) return x(y)
-  return false
 }
