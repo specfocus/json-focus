@@ -1,5 +1,6 @@
 import { isUndefined } from '@specfocus/main-focus/src/maybe';
 import { SimpleType } from '@specfocus/main-focus/src/object';
+import { Any } from 'any';
 
 // Named constants with unique integer values
 const C: Record<string, number> = {};
@@ -57,14 +58,15 @@ function alloc(size: number) {
   return Buffer.alloc ? Buffer.alloc(size) : new Buffer(size);
 }
 
-export type Tuple = [number | string, SimpleType];
-
 export interface YieldValue {
-  type: 'partial' | 'root' | 'entry';
+  type: 'partial' | 'root' | 'entry' | 'item';
+  key?: string;
+  value?: SimpleType;
 }
 
-export interface ReturnError {
-  type: 'error';
+export interface ReturnValue {
+  type: 'error' | 'partial' | 'value';
+  value?: SimpleType;
   message?: string;
 }
 
@@ -101,18 +103,28 @@ export default class Parser {
   // Stream offset
   offset = -1;
 
-  tuples: (SimpleType | Tuple)[] = [];
-
   constructor() {
   }
 
-  pipe(data: string | Buffer) {
-    const it = this.write(typeof data === 'string' ? Buffer.from(data) : data);
-    let result = it.next();
-    while (!result.done) {
-      result = it.next();
-      console.log({ result });
+  pipe(data: string | Buffer): Iterable<YieldValue | ReturnValue> {
+    const write = this.write.bind(this);
+    function* generator(): Generator<YieldValue, ReturnValue> {
+      const it = write(typeof data === 'string' ? Buffer.from(data) : data);
+      let result = it.next();
+      while (!result.done) {
+        if (result.value?.type !== 'partial') {
+          // @ts-ignore
+          yield result.value;
+        } else {
+          // console.log('SKIP>', result);
+        }
+        result = it.next();
+      }
+      return result.value;
     }
+    return {
+      [Symbol.iterator]: generator
+    };
   }
 
   private appendStringBuf(buf: any, start?: number, end?: number) {
@@ -152,7 +164,7 @@ export default class Parser {
     this.stringBuffer[this.stringBufferOffset++] = char;
   }
 
-  private charError(buffer: any, i: any): string | undefined {
+  private charError(buffer: any, i: any): IteratorResult<YieldValue, ReturnValue> {
     this.tState = STOP;
     const error = 'Unexpected ' + JSON.stringify(String.fromCharCode(buffer[i])) + ' at position ' + i + ' in state ' + Parser.toknam(this.tState);
     /*
@@ -162,17 +174,18 @@ export default class Parser {
       console.log({ error, stack: e.stack });
     }
     */
-    return error;
+    return { value: { type: 'error', message: error }, done: true };
   }
 
-  private emit(value: any) {
-    if (this.mode) { this.state = COMMA; }
-    this.onValue(value);
+  private emit(value: SimpleType) {
+    if (this.mode) {
+      this.state = COMMA;
+    }
   }
 
   // Override to implement your own number reviver.
   // Any value returned is treated as error and will interrupt parsing.
-  private numberReviver(text: any, buffer: any, i: any): string | undefined {
+  private numberReviver(text: any, buffer: any, i: any): IteratorResult<YieldValue, ReturnValue> {
     const result = Number(text);
 
     if (isNaN(result)) {
@@ -182,30 +195,37 @@ export default class Parser {
     if ((text.match(/[0-9]+/) == text) && (result.toString() != text)) {
       // Long string of digits which is an ID string and not valid and/or safe JavaScript integer Number
       return this.onToken(STRING, text);
-    } else {
-      return this.onToken(NUMBER, result);
     }
+    return this.onToken(NUMBER, result);
   }
 
-  private onToken(token: any, value: any): string | undefined {
+  private onToken(token: any, value: any): IteratorResult<YieldValue, ReturnValue> {
     // detect root is an object or an array
-    if (this.stack.length === 0) {
-      if (token === LEFT_BRACE) {
-        this.tuples.push({});
-      } else if (token === LEFT_BRACKET) {
-        this.tuples.push([]);
-      }
-    }
-    // usual logic
+    const result: IteratorResult<YieldValue, ReturnValue> = { value: { type: 'partial', value }, done: false };
     if (this.state === VALUE) {
       if (token === STRING || token === NUMBER || token === TRUE || token === FALSE || token === NULL) {
         if (this.value) {
           this.value[this.key] = value;
         }
         this.emit(value);
-        return;
+        if (this.stack.length === 0) {
+          console.log(this.stack.length, 'VALUE!!', value);
+          //@ts-ignore
+          return { value: { type: 'value', value }, done: false };
+        }
+        if (this.stack.length === 1) {
+          if (typeof this.key === 'string') {
+            return { value: { type: 'entry', value, key: this.key }, done: false };
+          } else {
+            return { value: { type: 'item', value }, done: false };
+          }
+        }
+        return { value: { type: 'partial', value }, done: false };
       }
       if (token === LEFT_BRACE) {
+        if (this.stack.length === 0) {
+          Object.assign(result, { value: { type: 'map' }, done: false });
+        }
         this.push();
         if (this.value) {
           this.value = this.value[this.key] = {};
@@ -215,9 +235,12 @@ export default class Parser {
         this.key = undefined;
         this.state = KEY;
         this.mode = OBJECT;
-        return;
+        return result;
       }
       if (token === LEFT_BRACKET) {
+        if (this.stack.length === 0) {
+          Object.assign(result, { value: { type: 'array' }, done: false });
+        }
         this.push();
         if (this.value) {
           this.value = this.value[this.key] = [];
@@ -227,21 +250,20 @@ export default class Parser {
         this.key = 0;
         this.mode = ARRAY;
         this.state = VALUE;
-        return;
+        return result;
       }
       if (token === RIGHT_BRACE) {
         if (this.mode === OBJECT) {
           this.pop();
-          return;
+          return result;
         }
         return this.parseError(token, value);
       }
       if (token === RIGHT_BRACKET) {
         if (this.mode === ARRAY) {
           this.pop();
-          return;
+          return result;
         }
-        return this.parseError(token, value);
       }
       return this.parseError(token, value);
     }
@@ -249,18 +271,18 @@ export default class Parser {
       if (token === STRING) {
         this.key = value;
         this.state = COLON;
-        return;
+        return result;
       }
       if (token === RIGHT_BRACE) {
         this.pop();
-        return;
+        return result;
       }
       return this.parseError(token, value);
     }
     if (this.state === COLON) {
       if (token === COLON) {
         this.state = VALUE;
-        return;
+        return result;
       }
       return this.parseError(token, value);
     }
@@ -269,41 +291,33 @@ export default class Parser {
         if (this.mode === ARRAY) {
           this.key++;
           this.state = VALUE;
-          return;
+          return result;
         }
         if (this.mode === OBJECT) {
           this.state = KEY;
         }
-        return;
+        return result;
       }
       if (token === RIGHT_BRACKET && this.mode === ARRAY || token === RIGHT_BRACE && this.mode === OBJECT) {
+        const value = this.value;
         this.pop();
-        return;
+        if (this.stack.length === 1) {
+          switch (typeof this.key) {
+            case 'string':
+              Object.assign(result.value, { type: 'entry', value, key: this.key });
+              break;
+            case 'number':
+              Object.assign(result.value, { type: 'item', value, key: this.key });
+              break;
+          }
+        }
+        return result;
       }
-
-      return this.parseError(token, value);
     }
     return this.parseError(token, value);
   }
 
-  private onValue(value: SimpleType) {
-    if (this.stack.length === 1) {
-      if (!isUndefined(this.key)) {
-        this.tuples.push([this.key, value]);
-        console.log(JSON.stringify(this.tuples));
-      } else {
-        this.tuples.push(value);
-        console.log(JSON.stringify(this.tuples));
-      }
-    } else if (this.stack.length === 0) {
-      if (this.tuples.length === 0) {
-        this.tuples.push(value);
-        console.log(JSON.stringify(this.tuples));
-      }
-    }
-  }
-
-  private parseError(token: any, value: any): string | undefined {
+  private parseError(token: any, value: any): IteratorResult<YieldValue, ReturnValue> {
     this.tState = STOP;
     const error = 'Unexpected ' + Parser.toknam(token) + (value ? ('(' + JSON.stringify(value) + ')') : '') + ' in state ' + Parser.toknam(this.state);
     /*
@@ -313,7 +327,7 @@ export default class Parser {
       console.log({ error, stack: e.stack });
     }
     */
-    return error;
+    return { value: { type: 'error', message: error }, done: true };
   }
 
   private pop() {
@@ -332,94 +346,71 @@ export default class Parser {
     this.stack.push({ value: this.value, key: this.key, mode: this.mode });
   }
 
-  private write(buffer: Buffer): Iterator<YieldValue, ReturnError | null> {
+  private write(buffer: Buffer): Iterator<YieldValue, ReturnValue> {
     const l = buffer.length;
     let n: any;
     let nextIndex = 0;
-    const next = (): IteratorResult<YieldValue, ReturnError | null> => {
+    const next = (): IteratorResult<YieldValue, ReturnValue> => {
       if (nextIndex >= l) {
-        return { value: null, done: true };
+        return { value: { type: 'partial' }, done: true };
       }
       const i = nextIndex;
       nextIndex++;
+      let result: IteratorResult<YieldValue, ReturnValue> = { value: { type: 'partial' }, done: false };
       if (this.tState === START) {
         n = buffer[i];
         this.offset++;
         if (n === 0x7b) {
-          const error = this.onToken(LEFT_BRACE, '{'); // {
-          if (error) {
-            return { value: { type: 'error', message: error }, done: true };
-          }
-          return { value: { type: 'partial' }, done: false };
+          return this.onToken(LEFT_BRACE, '{'); // {
         }
         if (n === 0x7d) {
-          const error = this.onToken(RIGHT_BRACE, '}'); // }
-          if (error) {
-            return { value: { type: 'error', message: error }, done: true };
-          }
-          return { value: { type: 'partial' }, done: false };
+          return this.onToken(RIGHT_BRACE, '}'); // }
         }
         if (n === 0x5b) {
-          const error = this.onToken(LEFT_BRACKET, '['); // [
-          if (error) {
-            return { value: { type: 'error', message: error }, done: true };
-          }
-          return { value: { type: 'partial' }, done: false };
+          return this.onToken(LEFT_BRACKET, '['); // [
         }
         if (n === 0x5d) {
-          const error = this.onToken(RIGHT_BRACKET, ']'); // ]
-          if (error) {
-            return { value: { type: 'error', message: error }, done: true };
-          }
-          return { value: { type: 'partial' }, done: false };
+          return this.onToken(RIGHT_BRACKET, ']'); // ]
         }
         if (n === 0x3a) {
-          const error = this.onToken(COLON, ':');  // :
-          if (error) {
-            return { value: { type: 'error', message: error }, done: true };
-          }
-          return { value: { type: 'partial' }, done: false };
+          return this.onToken(COLON, ':');  // :
         }
         if (n === 0x2c) {
-          const error = this.onToken(COMMA, ','); // ,
-          if (error) {
-            return { value: { type: 'error', message: error }, done: true };
-          }
-          return { value: { type: 'partial' }, done: false };
+          return this.onToken(COMMA, ','); // ,
         }
         if (n === 0x74) {
           this.tState = TRUE1;  // t
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x66) {
           this.tState = FALSE1;  // f
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x6e) {
           this.tState = NULL1; // n
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x22) { // "
           this.string = '';
           this.stringBufferOffset = 0;
           this.tState = STRING1;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x2d) {
           this.string = '-';
           this.tState = NUMBER1; // -
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n >= 0x30 && n < 0x40) { // 1-9
           this.string = String.fromCharCode(n);
           this.tState = NUMBER3;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x20 || n === 0x09 || n === 0x0a || n === 0x0d) {
           // whitespace
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === STRING1) { // After open quote
         n = buffer[i]; // get current byte from buffer
@@ -434,7 +425,7 @@ export default class Parser {
           this.appendStringBuf(this.temp_buffs[this.bytes_in_sequence]);
           this.bytes_in_sequence = this.bytes_remaining = 0;
           nextIndex = i + j;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (this.bytes_remaining === 0 && n >= 128) { // else if no remainder bytes carried over, parse multi byte (>=128) chars one at a time
           if (n <= 193 || n > 244) {
@@ -453,78 +444,78 @@ export default class Parser {
             this.appendStringBuf(buffer, i, i + this.bytes_in_sequence);
             nextIndex = i + this.bytes_in_sequence;
           }
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x22) {
           this.tState = START;
           this.string += this.stringBuffer.toString('utf8', 0, this.stringBufferOffset);
           this.stringBufferOffset = 0;
-          const error = this.onToken(STRING, this.string);
-          if (error) {
-            return { value: { type: 'error', message: error }, done: true };
+          result = this.onToken(STRING, this.string);
+          if (result.done) {
+            return result;
           }
           this.offset += Buffer.byteLength(this.string, 'utf8') + 1;
           this.string = undefined;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x5c) {
           this.tState = STRING2;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n >= 0x20) {
           this.appendStringChar(n);
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === STRING2) { // After backslash
         n = buffer[i];
         if (n === 0x22) {
           this.appendStringChar(n);
           this.tState = STRING1;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x5c) {
           this.appendStringChar(BACK_SLASH);
           this.tState = STRING1;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x2f) {
           this.appendStringChar(FORWARD_SLASH);
           this.tState = STRING1;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x62) {
           this.appendStringChar(BACKSPACE);
           this.tState = STRING1;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x66) {
           this.appendStringChar(FORM_FEED);
           this.tState = STRING1;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x6e) {
           this.appendStringChar(NEWLINE);
           this.tState = STRING1;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x72) {
           this.appendStringChar(CARRIAGE_RETURN);
           this.tState = STRING1;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x74) {
           this.appendStringChar(TAB);
           this.tState = STRING1;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
         if (n === 0x75) {
           this.unicode = '';
           this.tState = STRING3;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === STRING3 || this.tState === STRING4 || this.tState === STRING5 || this.tState === STRING6) { // unicode hex codes
         n = buffer[i];
@@ -548,13 +539,12 @@ export default class Parser {
             }
             this.tState = STRING1;
           }
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === NUMBER1 || this.tState === NUMBER3) {
         n = buffer[i];
-
         switch (n) {
           case 0x30: // 0
           case 0x31: // 1
@@ -576,104 +566,103 @@ export default class Parser {
             break;
           default:
             this.tState = START;
-            const error = this.numberReviver(this.string, buffer, i);
-            if (error) {
-              return { value: { type: 'error', message: error }, done: true };
+            result = this.numberReviver(this.string, buffer, i);
+            if (result.done) {
+              return result;
             }
-
             this.offset += this.string.length - 1;
             this.string = undefined;
             nextIndex--;
             break;
         }
-        return { value: { type: 'partial' }, done: false };
+        return result;
       }
       if (this.tState === TRUE1) { // r
         if (buffer[i] === 0x72) {
           this.tState = TRUE2;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === TRUE2) { // u
         if (buffer[i] === 0x75) {
           this.tState = TRUE3;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === TRUE3) { // e
         if (buffer[i] === 0x65) {
           this.tState = START;
-          const error = this.onToken(TRUE, true);
-          if (error) {
-            return { value: { type: 'error', message: error }, done: true };
+          result = this.onToken(TRUE, true);
+          if (result.done) {
+            return result;
           }
           this.offset += 3;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === FALSE1) { // a
         if (buffer[i] === 0x61) {
           this.tState = FALSE2;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === FALSE2) { // l
         if (buffer[i] === 0x6c) {
           this.tState = FALSE3;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === FALSE3) { // s
         if (buffer[i] === 0x73) {
           this.tState = FALSE4;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === FALSE4) { // e
         if (buffer[i] === 0x65) {
           this.tState = START;
-          const error = this.onToken(FALSE, false);
-          if (error) {
-            return { value: { type: 'error', message: error }, done: true };
+          result = this.onToken(FALSE, false);
+          if (result.done) {
+            return result;
           }
           this.offset += 4;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === NULL1) { // u
         if (buffer[i] === 0x75) {
           this.tState = NULL2;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === NULL2) { // l
         if (buffer[i] === 0x6c) {
           this.tState = NULL3;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
       if (this.tState === NULL3) { // l
         if (buffer[i] === 0x6c) {
           this.tState = START;
-          const error = this.onToken(NULL, null);
-          if (error) {
-            return { value: { type: 'error', message: error }, done: true };
+          result = this.onToken(NULL, null);
+          if (result.done) {
+            return result;
           }
           this.offset += 3;
-          return { value: { type: 'partial' }, done: false };
+          return result;
         }
-        return { value: { type: 'error', message: this.charError(buffer, i) }, done: true };
+        return this.charError(buffer, i);
       }
-      return { value: { type: 'partial' }, done: false };
+      return result;
     };
 
     return { next };

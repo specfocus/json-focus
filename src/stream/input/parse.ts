@@ -1,17 +1,13 @@
 import { isUndefined } from '@specfocus/main-focus/src/maybe';
 import { SimpleType } from '@specfocus/main-focus/src/object';
-import Parser, { Tuple } from './Parser';
+import Parser from './Parser';
 
-async function* generator(source: AsyncIterable<string>): AsyncGenerator<SimpleType | Tuple, void, any> {
+async function* generator(source: AsyncIterable<string>): AsyncGenerator<any> {
   const parser = new Parser();
   try {
     for await (const fragment of source) {
-      parser.pipe(fragment);
-      while (parser.tuples.length) {
-        const value = parser.tuples.shift();
-        if (!isUndefined(value)) {
-          yield value;
-        }
+      for (const node of parser.pipe(fragment)) {
+        yield node;
       }
     }
   }
@@ -19,8 +15,8 @@ async function* generator(source: AsyncIterable<string>): AsyncGenerator<SimpleT
     throw e;
   } finally {
     if (parser.string && parser.string.length) {
-      if (!Number.isNaN(parser.string)) {
-        yield Number(parser.string);
+      if (!Number.isNaN(Number(parser.string))) {
+        yield { type: 'value', value: Number(parser.string) };
       }
     }
   }

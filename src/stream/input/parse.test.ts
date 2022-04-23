@@ -3,7 +3,6 @@ import { isAsyncIterable } from '@specfocus/main-focus/src/iterable';
 import { isUndefined } from '@specfocus/main-focus/src/maybe';
 import { SimpleType } from '@specfocus/main-focus/src/object';
 import parser from './parse';
-import { Tuple } from './Parser';
 
 const array = [
   { "name": "Lucas" },
@@ -29,42 +28,42 @@ const json = {
     false
   ],
   "age": 55.3
-}
+};
 
 describe('Async JSON Perser', () => {
   it('should parse integer', async () => {
     const output = await test(JSON.stringify(100));
-    expect(output).toEqual([100]);
+    expect(output).toEqual(100);
   });
 
   it('should parse float', async () => {
     const output = await test(JSON.stringify(100.67));
-    expect(output).toEqual([100.67]);
+    expect(output).toEqual(100.67);
   });
 
   it('should parse string', async () => {
     const output = await test(JSON.stringify('hello'));
-    expect(output).toEqual(['hello']);
+    expect(output).toEqual('hello');
   });
 
   it('should parse boolean', async () => {
     const output = await test(JSON.stringify(true));
     console.log(JSON.stringify(output));
-    expect(output).toEqual([true]);
+    expect(output).toEqual(true);
   });
 
   it('should parse array', async () => {
     const output = await test(JSON.stringify(array));
     console.log(JSON.stringify(JSON.stringify(output)));
     // expect(output).toEqual([[], [{ name: 'Lucas' }, 0], [{ last: 'Oromi', age: 44 }, 1]]);
-    expect(merge(output)).toEqual(array);
+    expect(output).toEqual(array);
   });
 
   it('should parse object', async () => {
     const output = await test(JSON.stringify(json));
     console.log(JSON.stringify(JSON.stringify(output)));
     // expect(output).toEqual([{}, ['Lucas', 'first-name'], ['Oromi', 'last-name']]);
-    expect(merge(output)).toEqual(json);
+    expect(output).toEqual(json);
   });
 });
 
@@ -78,16 +77,32 @@ async function* generate(test: string): AsyncGenerator<string, void, any> {
   }
 }
 
-const test = async (test: string): Promise<Array<SimpleType | Tuple>> => {
-  const tuples: Array<SimpleType | Tuple> = [];
+const test = async (test: string): Promise<Array<SimpleType>> => {
+  let result: any;
   const iterable = generate(test);
   if (isAsyncIterable(iterable)) {
     const iterable2 = parser(iterable);
-    for await (const item of iterable2) {
-      tuples.push(item);
+    for await (const part of iterable2) {
+      console.log(part);
+      switch (part.type) {
+        case 'array':
+          result = [];
+          break;
+        case 'entry':
+          Object.assign(result, { [part.key]: part.value });
+          break;
+        case 'item':
+          result.push(part.value);
+          break;
+        case 'map':
+          result = {};
+          break;
+        case 'value':
+          result = part.value;
+      }
     }
   }
-  return tuples;
+  return result;
 };
 
 const merge = (output: unknown): unknown => {
@@ -110,4 +125,4 @@ const merge = (output: unknown): unknown => {
     }
   }
   return obj;
-}
+};
