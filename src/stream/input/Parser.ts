@@ -58,17 +58,48 @@ function alloc(size: number) {
   return Buffer.alloc ? Buffer.alloc(size) : new Buffer(size);
 }
 
-export interface YieldValue {
-  type: 'partial' | 'root' | 'entry' | 'item';
-  key?: string;
-  value?: SimpleType;
+interface ArrayToken {
+  type: 'array';
 }
 
-export interface ReturnValue {
-  type: 'error' | 'partial' | 'value';
-  value?: SimpleType;
-  message?: string;
+interface ContinueToken {
+  type: 'continue';
 }
+
+interface EntryToken {
+  type: 'entry';
+  key: string;
+  value: SimpleType;
+}
+
+interface ErrorToken {
+  type: 'error';
+  message: string;
+}
+
+interface ItemToken {
+  type: 'item';
+  index: number;
+  value: SimpleType;
+}
+
+interface MapToken {
+  type: 'map';
+}
+
+interface ValueToken {
+  type: 'value';
+  value: SimpleType;
+}
+
+export type Token =
+  | ArrayToken // root is an array
+  | ContinueToken // not a thing yet
+  | EntryToken
+  | ErrorToken
+  | ItemToken
+  | MapToken // root is an object
+  | ValueToken; // root is a value
 
 export default class Parser {
   static C = C;
@@ -103,20 +134,14 @@ export default class Parser {
   // Stream offset
   offset = -1;
 
-  constructor() {
-  }
-
-  pipe(data: string | Buffer): Iterable<YieldValue | ReturnValue> {
-    const write = this.write.bind(this);
-    function* generator(): Generator<YieldValue, ReturnValue> {
-      const it = write(typeof data === 'string' ? Buffer.from(data) : data);
+  tokenize(data: string | Buffer): Iterable<Token> {
+    const parse = this.parse.bind(this);
+    function* generator(): Generator<Token, Token> {
+      const it = parse(typeof data === 'string' ? Buffer.from(data) : data);
       let result = it.next();
       while (!result.done) {
-        if (result.value?.type !== 'partial') {
-          // @ts-ignore
+        if (result.value?.type !== 'continue') {
           yield result.value;
-        } else {
-          // console.log('SKIP>', result);
         }
         result = it.next();
       }
@@ -164,7 +189,7 @@ export default class Parser {
     this.stringBuffer[this.stringBufferOffset++] = char;
   }
 
-  private charError(buffer: any, i: any): IteratorResult<YieldValue, ReturnValue> {
+  private charError(buffer: any, i: any): IteratorResult<Token, Token> {
     this.tState = STOP;
     const error = 'Unexpected ' + JSON.stringify(String.fromCharCode(buffer[i])) + ' at position ' + i + ' in state ' + Parser.toknam(this.tState);
     /*
@@ -177,15 +202,9 @@ export default class Parser {
     return { value: { type: 'error', message: error }, done: true };
   }
 
-  private emit(value: SimpleType) {
-    if (this.mode) {
-      this.state = COMMA;
-    }
-  }
-
   // Override to implement your own number reviver.
   // Any value returned is treated as error and will interrupt parsing.
-  private numberReviver(text: any, buffer: any, i: any): IteratorResult<YieldValue, ReturnValue> {
+  private numberReviver(text: any, buffer: any, i: any): IteratorResult<Token, Token> {
     const result = Number(text);
 
     if (isNaN(result)) {
@@ -199,35 +218,32 @@ export default class Parser {
     return this.onToken(NUMBER, result);
   }
 
-  private onToken(token: any, value: any): IteratorResult<YieldValue, ReturnValue> {
-    // detect root is an object or an array
-    const result: IteratorResult<YieldValue, ReturnValue> = { value: { type: 'partial', value }, done: false };
+  private onToken(token: any, value: any): IteratorResult<Token, Token> {
+    const result: IteratorResult<Token, Token> = { value: { type: 'continue' }, done: false };
     if (this.state === VALUE) {
       if (token === STRING || token === NUMBER || token === TRUE || token === FALSE || token === NULL) {
         if (this.value) {
           this.value[this.key] = value;
         }
-        this.emit(value);
         if (this.stack.length === 0) {
-          //@ts-ignore
           return { value: { type: 'value', value }, done: false };
         }
-        if (this.stack.length === 1) {
-          switch (this.mode) {
-            case ARRAY:
-              return { value: { type: 'item', value }, done: false };
-            case OBJECT:
-              return { value: { type: 'entry', value, key: this.key }, done: false };
+        if (this.mode) {
+          this.state = COMMA;
+          if (this.stack.length === 1) {
+            switch (this.mode) {
+              case ARRAY:
+                return { value: { type: 'item', value, index: this.key }, done: false };
+              case OBJECT:
+                return { value: { type: 'entry', value, key: this.key }, done: false };
+            }
           }
         }
-        return { value: { type: 'partial', value }, done: false };
+        return { value: { type: 'continue' }, done: false };
       }
       if (token === LEFT_BRACE) {
-        if (this.stack.length === 0) {
-          Object.assign(result, { value: { type: 'map' }, done: false });
-        }
         this.push();
-        if (this.value) {
+        if (this.value && this.stack.length > 1) {
           this.value = this.value[this.key] = {};
         } else {
           this.value = {};
@@ -235,14 +251,15 @@ export default class Parser {
         this.key = undefined;
         this.state = KEY;
         this.mode = OBJECT;
+        if (this.stack.length === 1) {
+          console.log('MAP', JSON.stringify(this.stack));
+          return { value: { type: 'map' }, done: false };
+        }
         return result;
       }
       if (token === LEFT_BRACKET) {
-        if (this.stack.length === 0) {
-          Object.assign(result, { value: { type: 'array' }, done: false });
-        }
         this.push();
-        if (this.value) {
+        if (this.value && this.stack.length > 1) {
           this.value = this.value[this.key] = [];
         } else {
           this.value = [];
@@ -250,6 +267,10 @@ export default class Parser {
         this.key = 0;
         this.mode = ARRAY;
         this.state = VALUE;
+        if (this.stack.length === 1) {
+          console.log('ARRAY', JSON.stringify(this.stack));
+          return { value: { type: 'array' }, done: false };
+        }
         return result;
       }
       if (token === RIGHT_BRACE) {
@@ -317,7 +338,7 @@ export default class Parser {
     return this.parseError(token, value);
   }
 
-  private parseError(token: any, value: any): IteratorResult<YieldValue, ReturnValue> {
+  private parseError(token: any, value: any): IteratorResult<Token, Token> {
     this.tState = STOP;
     const error = 'Unexpected ' + Parser.toknam(token) + (value ? ('(' + JSON.stringify(value) + ')') : '') + ' in state ' + Parser.toknam(this.state);
     /*
@@ -336,27 +357,24 @@ export default class Parser {
     this.value = parent.value;
     this.key = parent.key;
     this.mode = parent.mode;
-    this.emit(value);
-    if (!this.mode) {
-      this.state = VALUE;
-    }
+    this.state = this.mode ? COMMA : VALUE;
   }
 
   private push() {
     this.stack.push({ value: this.value, key: this.key, mode: this.mode });
   }
 
-  private write(buffer: Buffer): Iterator<YieldValue, ReturnValue> {
+  private parse(buffer: Buffer): Iterator<Token, Token> {
     const l = buffer.length;
     let n: any;
     let nextIndex = 0;
-    const next = (): IteratorResult<YieldValue, ReturnValue> => {
+    const next = (): IteratorResult<Token, Token> => {
       if (nextIndex >= l) {
-        return { value: { type: 'partial' }, done: true };
+        return { value: { type: 'continue' }, done: true };
       }
       const i = nextIndex;
       nextIndex++;
-      let result: IteratorResult<YieldValue, ReturnValue> = { value: { type: 'partial' }, done: false };
+      let result: IteratorResult<Token, Token> = { value: { type: 'continue' }, done: false };
       if (this.tState === START) {
         n = buffer[i];
         this.offset++;

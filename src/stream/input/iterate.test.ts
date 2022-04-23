@@ -2,7 +2,7 @@ import { isArray } from '@specfocus/main-focus/src/array';
 import { isAsyncIterable } from '@specfocus/main-focus/src/iterable';
 import { isUndefined } from '@specfocus/main-focus/src/maybe';
 import { SimpleType } from '@specfocus/main-focus/src/object';
-import parser from './parse';
+import parser from './iterate';
 
 const array = [
   { "name": "Lucas" },
@@ -98,26 +98,4 @@ const test = async (test: string): Promise<Array<SimpleType>> => {
     }
   }
   return result;
-};
-
-const merge = (output: unknown): unknown => {
-  if (!isArray(output)) {
-    return output;
-  }
-  const [obj]: any = output;
-
-  if (obj === null || typeof obj !== 'object') {
-    return output;
-  }
-
-  for (let i = 1; i < output.length; i++) {
-    const item = output[i];
-    if (isArray(item)) {
-      const [key, val] = item;
-      if (!isUndefined(key)) {
-        obj[key as any] = val;
-      }
-    }
-  }
-  return obj;
 };
