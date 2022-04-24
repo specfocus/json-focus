@@ -56,38 +56,38 @@ function alloc(size: number) {
   return Buffer.alloc ? Buffer.alloc(size) : new Buffer(size);
 }
 
-interface ArrayToken {
+export interface ArrayToken {
   type: 'array';
 }
 
-interface ContinueToken {
+export interface ContinueToken {
   type: 'continue';
 }
 
-interface EntryToken {
+export interface EntryToken {
   type: 'entry';
   key: string;
   value: SimpleType;
 }
 
-interface ErrorToken {
+export interface ErrorToken {
   type: 'error';
   message: string;
 }
 
-interface ItemToken {
+export interface ItemToken {
   type: 'item';
   index: number;
   value: SimpleType;
 }
 
-interface ShapeToken {
+export interface ShapeToken {
   type: 'shape';
 }
 
-interface ValueToken {
+export interface ValueToken {
   type: 'value';
-  value: SimpleType;
+  value: boolean | number | string;
 }
 
 export type Token =
@@ -136,7 +136,7 @@ export default class Tokenizer {
     this.parse = this.parse.bind(this);
   }
 
-  tokenize(data: string | Buffer): Iterable<Token> {
+  tokenize(data: Uint8Array): Iterable<Token> {
     const parse = this.parse;
     function* generator(): Generator<Token, Token> {
       const it = parse(typeof data === 'string' ? Buffer.from(data) : data);
@@ -364,7 +364,7 @@ export default class Tokenizer {
     this.stack.push({ value: this.value, key: this.key, mode: this.mode });
   }
 
-  private parse(buffer: Buffer): Iterator<Token, Token> {
+  private parse(buffer: Uint8Array): Iterator<Token, Token> {
     const l = buffer.length;
     let n: any;
     let nextIndex = 0;

@@ -62,13 +62,13 @@ describe('Async JSON Perser', () => {
   });
 });
 
-async function* fakeAsync(test: string): AsyncGenerator<string, void, any> {
+async function* fakeAsync(test: string): AsyncGenerator<Uint8Array, void, any> {
   let index = 0;
   for (index = 0; index < test.length; index++) {
     const len = 5 + Math.random() * 10;
     const part = test.substring(index, index + len + 1);
     index += len;
-    yield part;
+    yield Buffer.from(part);
   }
 }
 
