@@ -9,8 +9,8 @@
     "url": "git@github.com:specfocus/release.git"
   },
   "scripts": {
-    "release": "node ../../scripts/publish main-focus ./release/packages",
-    "build": "rimraf ../../release/packages/main-focus && tsc",
+    "release": "node ../../scripts/publish json-focus ./release/packages",
+    "build": "rimraf ../../release/packages/json-focus && tsc",
     "prebuild-": "tslint -c tslint.json -p tsconfig.json --fix",
     "test": "jest"
   },

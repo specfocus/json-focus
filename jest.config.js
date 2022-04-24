@@ -1,7 +1,8 @@
 /** @type {import('ts-jest/dist/types').InitialOptionsTsJest} */
 module.exports = {
   preset: 'ts-jest',
-  roots: ['<rootDir>/src'],
+  roots: ['<rootDir>'],
+  modulePathIgnorePatterns: ['node_modules'],
   transform: {
     '^.+\\.[tj]s?$': 'ts-jest',
   },
