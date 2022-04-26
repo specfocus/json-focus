@@ -1,6 +1,6 @@
 var request = require('request')
 , JSONStream = require('JSONStream')
-, es = require('event-stream')
+, es = require('event-stream') // ../event
 
 var parser = JSONStream.parse(['rows', true]) //emit parts that match this path (any element of the rows array)
 , req = request({url: 'http://isaacs.couchone.com/registry/_all_docs'})
