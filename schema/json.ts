@@ -1,4 +1,4 @@
-import type { Any, Array as SimpleArray, Shape, Tuple } from '../any';
+import type { Any, Bunch as SimpleArray, Shape, Tuple } from '../any';
 import type { ArrayJsonSchema } from './array';
 import { ARRAY_TYPE } from './array';
 import type { BooleanJsonSchema } from './boolean';

@@ -1,4 +1,4 @@
-import { SimpleType } from '@specfocus/main-focus/src/object';
+import { Any, Bunch, Shape } from 'any';
 
 // Named constants with unique integer values
 const C: Record<string, number> = {};
@@ -28,7 +28,7 @@ const NULL1 = C.NULL1 = 0x41;
 const NULL2 = C.NULL2 = 0x42;
 const NULL3 = C.NULL3 = 0x43;
 const NUMBER1 = C.NUMBER1 = 0x51;
-const NUMBER3 = C.NUMBER3 = 0x53;
+export const NUMBER3 = C.NUMBER3 = 0x53;
 const STRING1 = C.STRING1 = 0x61;
 const STRING2 = C.STRING2 = 0x62;
 const STRING3 = C.STRING3 = 0x63;
@@ -58,6 +58,7 @@ function alloc(size: number) {
 
 export interface ArrayToken {
   type: 'array';
+  value?: Bunch;
 }
 
 export interface ContinueToken {
@@ -67,7 +68,7 @@ export interface ContinueToken {
 export interface EntryToken {
   type: 'entry';
   key: string;
-  value: SimpleType;
+  value: Any;
 }
 
 export interface ErrorToken {
@@ -78,17 +79,23 @@ export interface ErrorToken {
 export interface ItemToken {
   type: 'item';
   index: number;
-  value: SimpleType;
+  value: Any;
 }
 
 export interface ShapeToken {
   type: 'shape';
+  value?: Shape;
 }
 
 export interface ValueToken {
   type: 'value';
   value: boolean | number | string;
 }
+
+export const NO_ROOT_ARRAY = 'no-root-array';
+export const NO_ROOT_SHAPE = 'no-root-shape';
+export const FLAGS = [NO_ROOT_ARRAY, NO_ROOT_SHAPE] as const;
+export type Flag = typeof FLAGS[number];
 
 export type Token =
   | ArrayToken // root is an array
@@ -99,7 +106,7 @@ export type Token =
   | ShapeToken // root is an object
   | ValueToken; // root is a value
 
-export default class Tokenizer {
+export class Tokenizer {
   static C = C;
 
   // Slow code to string converter (only used when throwing syntax errors)
@@ -132,22 +139,26 @@ export default class Tokenizer {
   // Stream offset
   offset = -1;
 
-  constructor() {
+  readonly flags: Set<Flag>;
+
+  constructor(flags: Flag[] = []) {
+    this.flags = new Set(flags);
     this.parse = this.parse.bind(this);
   }
 
   tokenize(data: Uint8Array): Iterable<Token> {
-    const parse = this.parse;
-    function* generator(): Generator<Token, Token> {
+    const self = this;
+    const parse = self.parse;
+    function* generator(): Generator<Token, void> {
       const it = parse(typeof data === 'string' ? Buffer.from(data) : data);
-      let result = it.next();
-      while (!result.done) {
+      for (let result = it.next(); ; result = it.next()) {
         if (result.value?.type !== 'continue') {
           yield result.value;
         }
-        result = it.next();
+        if (result.done) {
+          break;
+        }
       }
-      return result.value;
     }
     return {
       [Symbol.iterator]: generator
@@ -245,7 +256,7 @@ export default class Tokenizer {
       }
       if (token === LEFT_BRACE) {
         this.push();
-        if (this.value && this.stack.length > 1) {
+        if (this.value && (!this.flags.has(NO_ROOT_SHAPE) || this.stack.length > 1)) {
           this.value = this.value[this.key] = {};
         } else {
           this.value = {};
@@ -253,14 +264,14 @@ export default class Tokenizer {
         this.key = undefined;
         this.state = KEY;
         this.mode = OBJECT;
-        if (this.stack.length === 1) {
+        if (this.flags.has(NO_ROOT_SHAPE) && this.stack.length === 1) {
           return { value: { type: 'shape' }, done: false };
         }
         return result;
       }
       if (token === LEFT_BRACKET) {
         this.push();
-        if (this.value && this.stack.length > 1) {
+        if (this.value && (!this.flags.has(NO_ROOT_ARRAY) || this.stack.length > 1)) {
           this.value = this.value[this.key] = [];
         } else {
           this.value = [];
@@ -268,7 +279,7 @@ export default class Tokenizer {
         this.key = 0;
         this.mode = ARRAY;
         this.state = VALUE;
-        if (this.stack.length === 1) {
+        if (this.flags.has(NO_ROOT_ARRAY) && this.stack.length === 1) {
           return { value: { type: 'array' }, done: false };
         }
         return result;
@@ -319,49 +330,43 @@ export default class Tokenizer {
         }
         return result;
       }
-      if (token === RIGHT_BRACKET && this.mode === ARRAY || token === RIGHT_BRACE && this.mode === OBJECT) {
-        const value = this.value;
+      if (token === RIGHT_BRACKET && this.mode === ARRAY) {
+        const val = this.value;
         this.pop();
-        if (this.stack.length === 1) {
-          switch (this.mode) {
-            case OBJECT:
-              Object.assign(result.value, { type: 'entry', value, key: this.key });
-              break;
-            case ARRAY:
-              Object.assign(result.value, { type: 'item', value, index: this.key });
-              break;
-          }
+        switch (this.stack.length) {
+          case 0:
+            if (!this.flags.has(NO_ROOT_ARRAY)) {
+              Object.assign(result.value, { type: 'array', value: val });
+              Object.assign(result, { done: true });
+            }
+            break;
+          case 1:
+            if (this.flags.has(NO_ROOT_ARRAY)) {
+              Object.assign(result.value, { type: 'item', value: val, index: this.key });
+            }
+            break;
+        }
+        return result;
+      }
+      if (token === RIGHT_BRACE && this.mode === OBJECT) {
+        const val = this.value;
+        this.pop();
+        switch (this.stack.length) {
+          case 0:
+            if (!this.flags.has(NO_ROOT_SHAPE)) {
+              Object.assign(result, { done: true, value: { type: 'shape', value: val } });
+            }
+            break;
+          case 1:
+            if (this.flags.has(NO_ROOT_SHAPE)) {
+              Object.assign(result.value, { type: 'entry', value: val, key: this.key });
+            }
+            break;
         }
         return result;
       }
     }
     return this.parseError(token, value);
-  }
-
-  private parseError(token: any, value: any): IteratorResult<Token, Token> {
-    this.tState = STOP;
-    const error = 'Unexpected ' + Tokenizer.toknam(token) + (value ? ('(' + JSON.stringify(value) + ')') : '') + ' in state ' + Tokenizer.toknam(this.state);
-    /*
-    try {
-      throw new Error(error);
-    } catch (e) {
-      console.log({ error, stack: e.stack });
-    }
-    */
-    return { value: { type: 'error', message: error }, done: true };
-  }
-
-  private pop() {
-    const value = this.value;
-    const parent = this.stack.pop();
-    this.value = parent.value;
-    this.key = parent.key;
-    this.mode = parent.mode;
-    this.state = this.mode ? COMMA : VALUE;
-  }
-
-  private push() {
-    this.stack.push({ value: this.value, key: this.key, mode: this.mode });
   }
 
   private parse(buffer: Uint8Array): Iterator<Token, Token> {
@@ -684,5 +689,31 @@ export default class Tokenizer {
     };
 
     return { next };
+  }
+
+  private parseError(token: any, value: any): IteratorResult<Token, Token> {
+    this.tState = STOP;
+    const error = 'Unexpected ' + Tokenizer.toknam(token) + (value ? ('(' + JSON.stringify(value) + ')') : '') + ' in state ' + Tokenizer.toknam(this.state);
+    /*
+    try {
+      throw new Error(error);
+    } catch (e) {
+      console.log({ error, stack: e.stack });
+    }
+    */
+    return { value: { type: 'error', message: error }, done: true };
+  }
+
+  private pop() {
+    const value = this.value;
+    const parent = this.stack.pop();
+    this.value = parent.value;
+    this.key = parent.key;
+    this.mode = parent.mode;
+    this.state = this.mode ? COMMA : VALUE;
+  }
+
+  private push() {
+    this.stack.push({ value: this.value, key: this.key, mode: this.mode });
   }
 }

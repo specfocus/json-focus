@@ -1,8 +1,7 @@
-import { isArray } from '@specfocus/main-focus/src/array';
 import { isAsyncIterable } from '@specfocus/main-focus/src/iterable';
-import { isUndefined } from '@specfocus/main-focus/src/maybe';
-import { SimpleType } from '@specfocus/main-focus/src/object';
+import { Any } from '../any';
 import iterate from './iterate';
+import { NO_ROOT_ARRAY, NO_ROOT_SHAPE } from './tokenizer';
 
 const array = [
   { "name": "Lucas" },
@@ -72,11 +71,11 @@ async function* fakeAsync(test: string): AsyncGenerator<Uint8Array, void, any> {
   }
 }
 
-const test = async (json: string): Promise<Array<SimpleType>> => {
+const test = async (json: string): Promise<Array<Any>> => {
   let result: any;
   const asyncIterable = fakeAsync(json);
   if (isAsyncIterable(asyncIterable)) {
-    const tokens = iterate(asyncIterable);
+    const tokens = iterate(asyncIterable, NO_ROOT_ARRAY, NO_ROOT_SHAPE);
     for await (const token of tokens) {
       switch (token.type) {
         case 'array':

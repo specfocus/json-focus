@@ -1,4 +1,4 @@
-import Tokenizer, { Token } from '../input/tokenizer';
+import Tokenizer, { Token } from '../../async/tokenizer';
 import { Through } from '@specfocus/main-focus/src/through';
 import { Stream, Transform, TransformOptions } from 'stream';
 import check from './check';
