@@ -1,7 +1,7 @@
 export declare type Any<nullable extends boolean = false, optional extends boolean = false>
-  = Array<nullable, optional> | Shape<nullable, optional> | Tuple<nullable, optional> | Value<nullable, optional> | Date;
+  = Bunch<nullable, optional> | Shape<nullable, optional> | Tuple<nullable, optional> | Value<nullable, optional> | Date;
 
-export declare type Array<nullable extends boolean = false, optional extends boolean = false>
+export declare type Bunch<nullable extends boolean = false, optional extends boolean = false>
   = Any<nullable, optional>[];
 
 export type NumberOrString<nullable extends boolean = false, optional extends boolean = false>

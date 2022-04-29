@@ -1,6 +1,6 @@
 import { Maybe } from '@specfocus/main-focus/src/maybe';
 import { AnyObject } from '@specfocus/main-focus/src/object';
-import type { Array as SimpleArray } from '../any';
+import type { Bunch as SimpleArray } from '../any';
 import BaseSchema, {
   AnySchema, Asserts, Config, Defined, NotNull, SchemaInnerTypeDescription,
   SchemaSpec, SetFlag, Thunk, ToggleDefault
