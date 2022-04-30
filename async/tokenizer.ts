@@ -133,8 +133,9 @@ type State  = BaseState | ArrayState | ObjectState | ValueState;
 const NOTHING: IteratorResult<undefined> = Object.freeze({ done: false, value: undefined });
 
 class Tokenizer {
-  state: State = { path: [] };
+  path: (number | string)[];
   tState = START;
+  value: any = undefined;
 
   string: any = undefined; // string data
   stringBuffer = alloc(STRING_BUFFER_SIZE);
@@ -142,6 +143,8 @@ class Tokenizer {
   unicode: any = undefined; // unicode escapes
   highSurrogate: any = undefined;
 
+  key: any = undefined;
+  mode: any = undefined;
   stack: any = [];
   expecting: any = VALUE;
   bytes_remaining = 0; // number of bytes remaining in multi byte utf8 char to read after split boundary
@@ -240,30 +243,29 @@ class Tokenizer {
   }
 
   private onToken(token: any, value: any): IteratorResult<InternalToken, InternalToken> {
-    const result: IteratorResult<InternalToken, InternalToken> = { done: false, value: undefined };
     if (this.expecting === VALUE) {
       if (token === STRING || token === NUMBER || token === TRUE || token === FALSE || token === NULL) {
-        if (this.state.value) {
-          this.state.value[this.state.key] = value;
+        if (this.value) {
+          this.value[this.key] = value;
         }
         if (this.stack.length === 0) {
           return { value: { type: 'value', path: [], value }, done: !this.flags.has(STREAMING) };
         }
-        if (this.state.mode) {
+        if (this.mode) {
           this.expecting = COMMA;
         }
-        return { value: { type: 'value', path: [...this.state.path, this.state.key], value }, done: false };
+        return { value: { type: 'value', path: [...this.path, this.key], value }, done: false };
       }
       if (token === LEFT_BRACE) {
         this.push();
-        if (this.state.value && (!this.flags.has(NO_ROOT_SHAPE) || this.stack.length > 1)) {
-          this.state.value = this.state.value[this.state.key] = {};
+        if (this.value && (!this.flags.has(NO_ROOT_SHAPE) || this.stack.length > 1)) {
+          this.value = this.value[this.key] = {};
         } else {
-          this.state.value = {};
+          this.value = {};
         }
-        this.state.key = undefined;
+        this.key = undefined;
         this.expecting = KEY;
-        this.state.mode = OBJECT;
+        this.mode = OBJECT;
         if (this.flags.has(NO_ROOT_SHAPE) && this.stack.length === 1) {
           return { value: { type: 'shape', path: [] }, done: false };
         }
@@ -271,13 +273,13 @@ class Tokenizer {
       }
       if (token === LEFT_BRACKET) {
         this.push();
-        if (this.state.value && (!this.flags.has(NO_ROOT_ARRAY) || this.stack.length > 1)) {
-          this.state.value = this.state.value[this.state.key] = [];
+        if (this.value && (!this.flags.has(NO_ROOT_ARRAY) || this.stack.length > 1)) {
+          this.value = this.value[this.key] = [];
         } else {
-          this.state.value = [];
+          this.value = [];
         }
-        this.state.key = 0;
-        this.state.mode = ARRAY;
+        this.key = 0;
+        this.mode = ARRAY;
         this.expecting = VALUE;
         if (this.flags.has(NO_ROOT_ARRAY) && this.stack.length === 1) {
           return { value: { type: 'array', path: [] }, done: false };
@@ -285,14 +287,14 @@ class Tokenizer {
         return NOTHING;
       }
       if (token === RIGHT_BRACE) {
-        if (this.state.mode === OBJECT) {
+        if (this.mode === OBJECT) {
           this.pop();
           return NOTHING;
         }
         return this.parseError(token, value);
       }
       if (token === RIGHT_BRACKET) {
-        if (this.state.mode === ARRAY) {
+        if (this.mode === ARRAY) {
           this.pop();
           return NOTHING;
         }
@@ -301,7 +303,7 @@ class Tokenizer {
     }
     if (this.expecting === KEY) {
       if (token === STRING) {
-        this.state.key = value;
+        this.key = value;
         this.expecting = COLON;
         return NOTHING;
       }
@@ -320,31 +322,31 @@ class Tokenizer {
     }
     if (this.expecting === COMMA) {
       if (token === COMMA) {
-        if (this.state.mode === ARRAY) {
-          this.state.key++;
+        if (this.mode === ARRAY) {
+          this.key++;
           this.expecting = VALUE;
           return NOTHING;
         }
-        if (this.state.mode === OBJECT) {
+        if (this.mode === OBJECT) {
           this.expecting = KEY;
         }
         return NOTHING;
       }
-      if (token === RIGHT_BRACKET && this.state.mode === ARRAY) {
-        const val = this.state.value;
+      if (token === RIGHT_BRACKET && this.mode === ARRAY) {
+        const val = this.value;
         this.pop();
         if (this.stack.length > 0) {
-          return { done: false, value: { type: 'array', path: [...this.state.path, this.state.key], value: val } };
+          return { done: false, value: { type: 'array', path: [...this.path, this.key], value: val } };
         } else if (!this.flags.has(NO_ROOT_ARRAY)) {
           return { done: !this.flags.has(STREAMING), value: { type: 'array', path: [], value: val } };
         }
         return NOTHING;
       }
-      if (token === RIGHT_BRACE && this.state.mode === OBJECT) {
-        const val = this.state.value;
+      if (token === RIGHT_BRACE && this.mode === OBJECT) {
+        const val = this.value;
         this.pop();
         if (this.stack.length > 0) {
-          return { done: false, value: { type: 'shape', path: [...this.state.path, this.state.key], value: val } };
+          return { done: false, value: { type: 'shape', path: [...this.path, this.key], value: val } };
         } else if (!this.flags.has(NO_ROOT_SHAPE)) {
           return { done: !this.flags.has(STREAMING), value: { type: 'shape', path: [], value: val } };
         }
@@ -580,7 +582,7 @@ class Tokenizer {
             this.offset += this.string.length - 1;
             this.string = undefined;
             nextIndex--;
-        return result;
+            return result;
         }
         return NOTHING;
       }
@@ -689,15 +691,31 @@ class Tokenizer {
   }
 
   private pop() {
-    const state = this.state;
+    const value = this.value;
+    const parent = this.stack.pop();
+    this.value = parent.value;
+    this.key = parent.key;
+    this.mode = parent.mode;
+    this.expecting = this.mode ? COMMA : VALUE;
+    this.path.pop();
+    /*const state = this.state;
     this.state = this.stack.pop();
     this.expecting = state.mode ? COMMA : VALUE;
+    */
   }
 
   private push() {
+    if (this.stack.length === 0) {
+      this.path = [];
+    } else {
+      this.path.push(this.key);
+    }
+    this.stack.push({ value: this.value, key: this.key, mode: this.mode });
+    /*
     const path = this.stack.length === 0 ? [] : [...this.state.path, this.state.key];
     this.stack.push(this.state);
     this.state = { path };
+    */
   }
 }
 
