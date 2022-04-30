@@ -1,4 +1,4 @@
-import Tokenizer, { Token } from '../../async/tokenizer';
+import Tokenizer, { Cursor } from '../../async/tokenizer';
 import { Through } from '@specfocus/main-focus/src/through';
 import { Stream, Transform, TransformOptions } from 'stream';
 import check from './check';
@@ -30,7 +30,7 @@ export class StreamParser extends Tokenizer {
     this.stream = new Through(this.transform, this.flush);
   }
 
-  transform(chunk: string | Buffer, encoding: BufferEncoding, callback: (error?: Error, data?: Token) => void): void {
+  transform(chunk: string | Buffer, encoding: BufferEncoding, callback: (error?: Error, data?: Cursor) => void): void {
     if (typeof chunk === 'string') chunk = Buffer.from(chunk);
     const tokens = this.tokenize(chunk);
     for (const token of tokens) {
@@ -42,7 +42,7 @@ export class StreamParser extends Tokenizer {
     }
   }
 
-  flush(callback: (error?: Error, data?: Token) => void): void {
+  flush(callback: (error?: Error, data?: Cursor) => void): void {
     if (this.header) {
       this.stream.emit('header', this.header);
     }

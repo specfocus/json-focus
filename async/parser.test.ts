@@ -64,6 +64,7 @@ const test = async (json: string): Promise<Any> => {
   const token = await parse(fakeAsync(json));
   // @ts-ignore
   if (token?.type === 'error') {
+    // @ts-ignore
     throw token.message;
   }
   return token?.value;

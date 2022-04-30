@@ -1,4 +1,5 @@
-import { Any, Bunch, Shape } from 'any';
+import { Any, Bunch, Shape } from '../any';
+import { ARRAY_TYPE, BOOLEAN_TYPE, NUMBER_TYPE, OBJECT_TYPE, STRING_TYPE } from '../schema';
 
 // Named constants with unique integer values
 const C: Record<string, number> = {};
@@ -64,34 +65,78 @@ const toknam = (code: any): any => {
     if (C[key] === code) { return key; }
   }
   return code && ('0x' + code.toString(16));
+};
+
+const PARTS = [COLON, COMMA, KEY, VALUE] as const;
+const NULL_TYPE = 'null';
+const VALUE_TYPE = 'value';
+const STATE_VALUE_TYPES = [ARRAY_TYPE, BOOLEAN_TYPE, NUMBER_TYPE, OBJECT_TYPE, STRING_TYPE, VALUE_TYPE] as const;
+
+type TokenPart = typeof PARTS[number];
+type TokenType = typeof STATE_VALUE_TYPES[number];
+
+interface Cursor {
+  key?: number | string;
+  path: (number | string)[];
+  expecting: TokenPart;
+  type: TokenType;
+  mode: any;
+  value: Any;
 }
 
-export interface ArrayToken {
-  type: 'array';
-  path: (number | string)[];
+export interface ArrayValue extends Omit<Cursor, 'type' | 'value'> {
+  type: typeof ARRAY_TYPE;
   value?: Bunch;
 }
 
-export interface ContinueToken {
-  type: 'continue';
+export interface BooleanValue extends Omit<Cursor, 'type' | 'value'> {
+  type: typeof BOOLEAN_TYPE;
+  value: boolean;
 }
 
-export interface ErrorToken {
+export interface ErrorState extends Omit<Cursor, 'type' | 'value'> {
   type: 'error';
   message: string;
+  // value: Any;
 }
 
-export interface ShapeToken {
-  type: 'shape';
-  path: (number | string)[];
+export interface NullValue extends Omit<Cursor, 'type' | 'value'> {
+  type: typeof NULL_TYPE;
+  value: null;
+}
+
+export interface NumberValue extends Omit<Cursor, 'type' | 'value'> {
+  type: typeof NUMBER_TYPE;
+  value: number;
+}
+
+export interface ObjectValue extends Omit<Cursor, 'type' | 'value'> {
+  type: typeof OBJECT_TYPE;
+  key: number | string;
   value?: Shape;
 }
 
-export interface ValueToken {
-  type: 'value';
-  path: (number | string)[];
+export interface StringValue extends Omit<Cursor, 'type' | 'value'> {
+  type: typeof STRING_TYPE;
+  value: string;
+}
+
+export interface ValueState extends Omit<Cursor, 'type' | 'value'> {
+  type: typeof VALUE_TYPE;
   value: boolean | number | string;
 }
+
+export type StateValue =
+  | ArrayValue // root is an array
+  | BooleanValue
+  | ErrorState
+  | NullValue
+  | NumberValue
+  | ObjectValue // root is an object
+  | StringValue
+  | ValueState; // root is a value
+
+type ResultState = IteratorResult<StateValue | undefined, StateValue | undefined>;
 
 export const STREAMING = 'streaming';
 export const NO_ROOT_ARRAY = 'no-root-array';
@@ -99,31 +144,17 @@ export const NO_ROOT_SHAPE = 'no-root-shape';
 export const FLAGS = [NO_ROOT_ARRAY, NO_ROOT_SHAPE, STREAMING] as const;
 export type Flag = typeof FLAGS[number];
 
-export type Token =
-  | ArrayToken // root is an array
-  | ErrorToken
-  | ShapeToken // root is an object
-  | ValueToken; // root is a value
-
-type InternalToken = Token | ContinueToken;
+const NOTHING: ResultState = Object.freeze({ done: false, value: undefined });
 
 class Tokenizer {
-  static C = C;
-
-  path: (number | string)[];
+  cursor: Cursor;
   tState = START;
-  value: any = undefined;
-
   string: any = undefined; // string data
   stringBuffer = alloc(STRING_BUFFER_SIZE);
   stringBufferOffset = 0;
   unicode: any = undefined; // unicode escapes
   highSurrogate: any = undefined;
-
-  key: any = undefined;
-  mode: any = undefined;
   stack: any = [];
-  state: any = VALUE;
   bytes_remaining = 0; // number of bytes remaining in multi byte utf8 char to read after split boundary
   bytes_in_sequence = 0; // bytes in multi byte utf8 char to read
   temp_buffs: any = { '2': alloc(2), '3': alloc(3), '4': alloc(4) }; // for rebuilding chars split before boundary is reached
@@ -132,19 +163,22 @@ class Tokenizer {
   offset = -1;
 
   constructor(public readonly flags: Set<Flag>) {
+    this.cursor = { path: [], expecting: VALUE, type: VALUE_TYPE, mode: undefined, value: undefined };
     this.parse = this.parse.bind(this);
   }
 
-  tokenize(data: Uint8Array): Iterable<Token> {
+  tokenize(data: Uint8Array): Iterable<StateValue> {
     const self = this;
-    const parse = self.parse;
-    function* generator(): Generator<Token, void> {
-      const it = parse(typeof data === 'string' ? Buffer.from(data) : data);
+    function* generator(): Generator<StateValue, void> {
+      const it = self.parse(typeof data === 'string' ? Buffer.from(data) : data);
       for (let result = it.next(); ; result = it.next()) {
-        if (result.value?.type !== 'continue') {
+        if (typeof result.value !== 'undefined') {
+          console.log('YIELD', JSON.stringify(result.value));
+          // @ts-ignore
           yield result.value;
         }
         if (result.done) {
+          console.log('DONE');
           break;
         }
       }
@@ -191,7 +225,7 @@ class Tokenizer {
     this.stringBuffer[this.stringBufferOffset++] = char;
   }
 
-  private charError(buffer: any, i: any): IteratorResult<Token, Token> {
+  private charError(buffer: any, i: any): ResultState {
     this.tState = STOP;
     const error = 'Unexpected ' + JSON.stringify(String.fromCharCode(buffer[i])) + ' at position ' + i + ' in state ' + toknam(this.tState);
     /*
@@ -201,12 +235,12 @@ class Tokenizer {
       console.log({ error, stack: e.stack });
     }
     */
-    return { value: { type: 'error', message: error }, done: true };
+    return { done: true, value: { ...this.cursor, type: 'error', message: error } };
   }
 
   // Override to implement your own number reviver.
   // Any value returned is treated as error and will interrupt parsing.
-  private numberReviver(text: any, buffer: any, i: any): IteratorResult<InternalToken, InternalToken> {
+  private numberReviver(text: any, buffer: any, i: any): ResultState {
     const result = Number(text);
 
     if (isNaN(result)) {
@@ -220,132 +254,149 @@ class Tokenizer {
     return this.onToken(NUMBER, result);
   }
 
-  private onToken(token: any, value: any): IteratorResult<InternalToken, InternalToken> {
-    const result: IteratorResult<InternalToken, InternalToken> = { value: { type: 'continue' }, done: false };
-    if (this.state === VALUE) {
+  private onToken(token: any, value: any): ResultState {
+    if (this.cursor?.expecting === VALUE) {
       if (token === STRING || token === NUMBER || token === TRUE || token === FALSE || token === NULL) {
-        if (this.value) {
-          this.value[this.key] = value;
+        if (this.cursor.value) {
+          this.cursor.value[this.cursor.key] = value;
         }
         if (this.stack.length === 0) {
-          return { value: { type: 'value', path: [], value }, done: !this.flags.has(STREAMING) };
+          return { done: !this.flags.has(STREAMING), value: { ...this.cursor, type: 'value', value } };
         }
-        if (this.mode) {
-          this.state = COMMA;
+        if (this.cursor.mode) {
+          this.cursor.expecting = COMMA;
         }
-        return { value: { type: 'value', path: [...this.path, this.key], value }, done: false };
+        // @ts-ignore
+        return { done: false, value: { ...this.cursor, type: 'value' } };
       }
       if (token === LEFT_BRACE) {
         this.push();
-        if (this.value && (!this.flags.has(NO_ROOT_SHAPE) || this.stack.length > 1)) {
-          this.value = this.value[this.key] = {};
+        if (this.cursor.value && (!this.flags.has(NO_ROOT_SHAPE) || this.stack.length > 1)) {
+          this.cursor.value = this.cursor.value[this.cursor.key] = {};
         } else {
-          this.value = {};
+          this.cursor.value = {};
         }
-        this.key = undefined;
-        this.state = KEY;
-        this.mode = OBJECT;
+        this.cursor.key = undefined;
+        this.cursor.expecting = KEY;
+        this.cursor.mode = OBJECT;
         if (this.flags.has(NO_ROOT_SHAPE) && this.stack.length === 1) {
-          return { value: { type: 'shape', path: [] }, done: false };
+          // @ts-ignore
+          return { done: false, value: { type: OBJECT_TYPE } };
         }
-        return result;
+        return NOTHING;
       }
       if (token === LEFT_BRACKET) {
         this.push();
-        if (this.value && (!this.flags.has(NO_ROOT_ARRAY) || this.stack.length > 1)) {
-          this.value = this.value[this.key] = [];
+        if (this.cursor.value && (!this.flags.has(NO_ROOT_ARRAY) || this.stack.length > 1)) {
+          this.cursor.value = this.cursor.value[this.cursor.key] = [];
         } else {
-          this.value = [];
+          this.cursor.value = [];
         }
-        this.key = 0;
-        this.mode = ARRAY;
-        this.state = VALUE;
+        this.cursor.key = 0;
+        this.cursor.mode = ARRAY;
+        this.cursor.expecting = VALUE;
         if (this.flags.has(NO_ROOT_ARRAY) && this.stack.length === 1) {
-          return { value: { type: 'array', path: [] }, done: false };
+          // @ts-ignore
+          return { done: false, value: { ...this.cursor, type: ARRAY_TYPE } };
         }
-        return result;
+        return NOTHING;
       }
       if (token === RIGHT_BRACE) {
-        if (this.mode === OBJECT) {
+        if (this.cursor.mode === OBJECT) {
+          const current = { ...this.cursor, type: OBJECT_TYPE };
           this.pop();
-          return result;
+          console.log('RIGHT_BRACE', current);
+          return NOTHING;
         }
         return this.parseError(token, value);
       }
       if (token === RIGHT_BRACKET) {
-        if (this.mode === ARRAY) {
+        const current = { ...this.cursor, type: OBJECT_TYPE };
+        if (this.cursor.mode === ARRAY) {
           this.pop();
-          return result;
+          console.log('RIGHT BRACE', current);
+          return NOTHING;
         }
       }
       return this.parseError(token, value);
     }
-    if (this.state === KEY) {
+    if (this.cursor.expecting === KEY) {
       if (token === STRING) {
-        this.key = value;
-        this.state = COLON;
-        return result;
+        this.cursor.key = value;
+        this.cursor.expecting = COLON;
+        return NOTHING;
       }
       if (token === RIGHT_BRACE) {
+        const current = { ...this.cursor, type: OBJECT_TYPE };
         this.pop();
-        return result;
+        console.log('BRACE', current);
+        return NOTHING;
       }
       return this.parseError(token, value);
     }
-    if (this.state === COLON) {
+    if (this.cursor.expecting === COLON) {
       if (token === COLON) {
-        this.state = VALUE;
-        return result;
+        this.cursor.expecting = VALUE;
+        return NOTHING;
       }
       return this.parseError(token, value);
     }
-    if (this.state === COMMA) {
+    if (this.cursor.expecting === COMMA) {
       if (token === COMMA) {
-        if (this.mode === ARRAY) {
-          this.key++;
-          this.state = VALUE;
-          return result;
+        if (this.cursor.mode === ARRAY) {
+          // @ts-ignore
+          this.cursor.key++;
+          this.cursor.expecting = VALUE;
+          return NOTHING;
         }
-        if (this.mode === OBJECT) {
-          this.state = KEY;
+        if (this.cursor.mode === OBJECT) {
+          this.cursor.expecting = KEY;
         }
-        return result;
+        return NOTHING;
       }
-      if (token === RIGHT_BRACKET && this.mode === ARRAY) {
-        const val = this.value;
+      if (token === RIGHT_BRACKET && this.cursor.mode === ARRAY) {
+        const current = { ...this.cursor, type:ARRAY_TYPE };
+        const val = this.cursor.value;
         this.pop();
         if (this.stack.length > 0) {
-          Object.assign(result.value, { type: 'array', path: [...this.path, this.key], value: val });
+          // @ts-ignore
+          return { done: false, value: current };
         } else if (!this.flags.has(NO_ROOT_ARRAY)) {
-          Object.assign(result, { done: !this.flags.has(STREAMING), value: { type: 'array', path: [], value: val } });
+          // @ts-ignore
+          return { done: !this.flags.has(STREAMING), value: current };
+        } else {
+          console.log('ARRAY');
         }
-        return result;
+        return NOTHING;
       }
-      if (token === RIGHT_BRACE && this.mode === OBJECT) {
-        const val = this.value;
+      if (token === RIGHT_BRACE && this.cursor.mode === OBJECT) {
+        const current = { ...this.cursor, type: OBJECT_TYPE };
         this.pop();
         if (this.stack.length > 0) {
-          Object.assign(result.value, { type: 'shape', path: [...this.path, this.key], value: val });
+          // @ts-ignore
+          return { done: false, value: current };
         } else if (!this.flags.has(NO_ROOT_SHAPE)) {
-          Object.assign(result, { done: !this.flags.has(STREAMING), value: { type: 'shape', path: [], value: val } });
+          // @ts-ignore
+          return { done: !this.flags.has(STREAMING), value: current };
+        } else {
+          console.log('OBJECT');
         }
-        return result;
+        return NOTHING;
       }
     }
     return this.parseError(token, value);
   }
 
-  private parse(buffer: Uint8Array): Iterator<InternalToken, InternalToken> {
+  private parse(buffer: Uint8Array): Iterator<StateValue | undefined, StateValue | undefined> {
     const l = buffer.length;
     let n: any;
     let nextIndex = 0;
-    const next = (): IteratorResult<InternalToken, InternalToken> => {
+    const next = (): ResultState => {
       if (nextIndex >= l) {
-        return { value: { type: 'continue' }, done: true };
+        return { value: undefined, done: true };
       }
       const i = nextIndex;
       nextIndex++;
-      let result: IteratorResult<InternalToken, InternalToken> = { value: { type: 'continue' }, done: false };
       if (this.tState === START) {
         n = buffer[i];
         this.offset++;
@@ -369,35 +420,35 @@ class Tokenizer {
         }
         if (n === 0x74) {
           this.tState = TRUE1;  // t
-          return result;
+          return NOTHING;
         }
         if (n === 0x66) {
           this.tState = FALSE1;  // f
-          return result;
+          return NOTHING;
         }
         if (n === 0x6e) {
           this.tState = NULL1; // n
-          return result;
+          return NOTHING;
         }
         if (n === 0x22) { // "
           this.string = '';
           this.stringBufferOffset = 0;
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x2d) {
           this.string = '-';
           this.tState = NUMBER1; // -
-          return result;
+          return NOTHING;
         }
         if (n >= 0x30 && n < 0x40) { // 1-9
           this.string = String.fromCharCode(n);
           this.tState = NUMBER3;
-          return result;
+          return NOTHING;
         }
         if (n === 0x20 || n === 0x09 || n === 0x0a || n === 0x0d) {
           // whitespace
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
@@ -414,11 +465,11 @@ class Tokenizer {
           this.appendStringBuf(this.temp_buffs[this.bytes_in_sequence]);
           this.bytes_in_sequence = this.bytes_remaining = 0;
           nextIndex = i + j;
-          return result;
+          return NOTHING;
         }
         if (this.bytes_remaining === 0 && n >= 128) { // else if no remainder bytes carried over, parse multi byte (>=128) chars one at a time
           if (n <= 193 || n > 244) {
-            return { value: { type: 'error', message: 'Invalid UTF-8 character at position ' + i + ' in state ' + toknam(this.tState) }, done: true };
+            return { done: true, value: { ...this.cursor, type: 'error', message: 'Invalid UTF-8 character at position ' + i + ' in state ' + toknam(this.tState) } };
           }
           if ((n >= 194) && (n <= 223)) this.bytes_in_sequence = 2;
           if ((n >= 224) && (n <= 239)) this.bytes_in_sequence = 3;
@@ -433,13 +484,13 @@ class Tokenizer {
             this.appendStringBuf(buffer, i, i + this.bytes_in_sequence);
             nextIndex = i + this.bytes_in_sequence;
           }
-          return result;
+          return NOTHING;
         }
         if (n === 0x22) {
           this.tState = START;
           this.string += this.stringBuffer.toString('utf8', 0, this.stringBufferOffset);
           this.stringBufferOffset = 0;
-          result = this.onToken(STRING, this.string);
+          const result = this.onToken(STRING, this.string);
           if (result.done) {
             return result;
           }
@@ -449,11 +500,11 @@ class Tokenizer {
         }
         if (n === 0x5c) {
           this.tState = STRING2;
-          return result;
+          return NOTHING;
         }
         if (n >= 0x20) {
           this.appendStringChar(n);
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
@@ -462,47 +513,47 @@ class Tokenizer {
         if (n === 0x22) {
           this.appendStringChar(n);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x5c) {
           this.appendStringChar(BACK_SLASH);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x2f) {
           this.appendStringChar(FORWARD_SLASH);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x62) {
           this.appendStringChar(BACKSPACE);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x66) {
           this.appendStringChar(FORM_FEED);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x6e) {
           this.appendStringChar(NEWLINE);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x72) {
           this.appendStringChar(CARRIAGE_RETURN);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x74) {
           this.appendStringChar(TAB);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x75) {
           this.unicode = '';
           this.tState = STRING3;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
@@ -528,11 +579,12 @@ class Tokenizer {
             }
             this.tState = STRING1;
           }
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === NUMBER1 || this.tState === NUMBER3) {
+        let result = NOTHING;
         n = buffer[i];
         switch (n) {
           case 0x30: // 0
@@ -569,21 +621,21 @@ class Tokenizer {
       if (this.tState === TRUE1) { // r
         if (buffer[i] === 0x72) {
           this.tState = TRUE2;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === TRUE2) { // u
         if (buffer[i] === 0x75) {
           this.tState = TRUE3;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === TRUE3) { // e
         if (buffer[i] === 0x65) {
           this.tState = START;
-          result = this.onToken(TRUE, true);
+          const result = this.onToken(TRUE, true);
           if (result.done) {
             return result;
           }
@@ -595,28 +647,28 @@ class Tokenizer {
       if (this.tState === FALSE1) { // a
         if (buffer[i] === 0x61) {
           this.tState = FALSE2;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === FALSE2) { // l
         if (buffer[i] === 0x6c) {
           this.tState = FALSE3;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === FALSE3) { // s
         if (buffer[i] === 0x73) {
           this.tState = FALSE4;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === FALSE4) { // e
         if (buffer[i] === 0x65) {
           this.tState = START;
-          result = this.onToken(FALSE, false);
+          const result = this.onToken(FALSE, false);
           if (result.done) {
             return result;
           }
@@ -628,21 +680,21 @@ class Tokenizer {
       if (this.tState === NULL1) { // u
         if (buffer[i] === 0x75) {
           this.tState = NULL2;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === NULL2) { // l
         if (buffer[i] === 0x6c) {
           this.tState = NULL3;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === NULL3) { // l
         if (buffer[i] === 0x6c) {
           this.tState = START;
-          result = this.onToken(NULL, null);
+          const result = this.onToken(NULL, null);
           if (result.done) {
             return result;
           }
@@ -651,15 +703,15 @@ class Tokenizer {
         }
         return this.charError(buffer, i);
       }
-      return result;
+      return NOTHING;
     };
 
     return { next };
   }
 
-  private parseError(token: any, value: any): IteratorResult<Token, Token> {
+  private parseError(token: any, value: any): IteratorResult<StateValue, StateValue> {
     this.tState = STOP;
-    const error = 'Unexpected ' + toknam(token) + (value ? ('(' + JSON.stringify(value) + ')') : '') + ' in state ' + toknam(this.state);
+    const error = 'Unexpected ' + toknam(token) + (value ? ('(' + JSON.stringify(value) + ')') : '') + ' in state ' + toknam(this.cursor.expecting);
     /*
     try {
       throw new Error(error);
@@ -667,50 +719,44 @@ class Tokenizer {
       console.log({ error, stack: e.stack });
     }
     */
-    return { value: { type: 'error', message: error }, done: true };
+    return { done: true, value: { ...this.cursor, type: 'error', message: error } };
   }
 
   private pop() {
-    const value = this.value;
-    const parent = this.stack.pop();
-    this.value = parent.value;
-    this.key = parent.key;
-    this.mode = parent.mode;
-    this.state = this.mode ? COMMA : VALUE;
-    this.path.pop();
+    const { mode } = this.cursor;
+    this.cursor = this.stack.pop();
+    this.cursor.expecting = mode ? COMMA : VALUE;
   }
 
   private push() {
-    if (this.stack.length === 0) {
-      this.path = [];
-    } else {
-      this.path.push(this.key);
-    }
-    this.stack.push({ value: this.value, key: this.key, mode: this.mode });
+    this.stack.push(this.cursor);
+    const path = typeof this.cursor.key !== 'undefined' ? [...this.cursor.path || [], this.cursor.key] : this.cursor.path || [];
+    console.log({ path, key: this.cursor.key });
+    this.cursor = { ...this.cursor, path };
   }
 }
 
-export default async function* tokenize(source: AsyncIterable<Uint8Array>, ...args: Flag[]): AsyncGenerator<Token> {
+export default async function* tokenize(source: AsyncIterable<Uint8Array>, ...args: Flag[]): AsyncGenerator<StateValue> {
   const tokenizer = new Tokenizer(new Set(args));
   for await (const chunk of source) {
-    for (const token of tokenizer.tokenize(chunk)) {
-      if (token.type === 'error') {
-        return token;
+    for (const value of tokenizer.tokenize(chunk)) {
+      if (value.type === 'error') {
+        return value;
       }
-      if (token.path.length === 0 || !tokenizer.flags.has(STREAMING)) {
-        yield token;
+      if (value.path?.length || !tokenizer.flags.has(STREAMING)) {
+        yield value;
       }
     }
   }
   if (tokenizer.string?.length > 0 && tokenizer.tState === C.NUMBER3) {
     const value = Number(tokenizer.string);
     if (!Number.isNaN(value)) {
-      yield { type: 'value', path: [], value };
+      yield { ...tokenizer.cursor, type: 'value', value };
     }
   }
 }
 
-export const parse = async (source: AsyncIterable<Uint8Array>): Promise<Token> => {
+export const parse = async (source: AsyncIterable<Uint8Array>): Promise<Cursor> => {
   const iterator = tokenize(source, STREAMING);
   const result = await iterator.next();
   return result?.value;

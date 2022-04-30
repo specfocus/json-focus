@@ -1,5 +1,6 @@
 import { isAsyncIterable } from '@specfocus/main-focus/src/iterable';
 import { Any } from '../any';
+import { ARRAY_TYPE, OBJECT_TYPE } from '../schema';
 import tokenize, { NO_ROOT_ARRAY, NO_ROOT_SHAPE } from './tokenizer';
 
 const array = [
@@ -76,24 +77,30 @@ const test = async (json: string): Promise<Array<Any>> => {
   if (isAsyncIterable(asyncIterable)) {
     const tokens = tokenize(asyncIterable, NO_ROOT_ARRAY, NO_ROOT_SHAPE);
     for await (const token of tokens) {
+      // @ts-ignore
       if (token.type === 'error') {
         break;
       }
+
       const { path, type, value } = token;
-      if (path?.length == 0) {
+      if (!path?.length) {
         switch(type) {
-          case 'array':
+          case ARRAY_TYPE:
+            console.log('ROOT ARRAY');
             result = [];
             break;
-          case 'shape':
+          case OBJECT_TYPE:
+            console.log('ROOT OBJECT');
             result = {};
             break;
           case 'value':
+            console.log('ROOT VALUE');
             result = value;
             break;
         }
       } else if (path?.length === 1) {
         const key = path[0];
+        console.log('ENTRY', key, value);
         result[key] = value;
       }
     }
