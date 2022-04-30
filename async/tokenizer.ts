@@ -28,7 +28,7 @@ const NULL1 = C.NULL1 = 0x41;
 const NULL2 = C.NULL2 = 0x42;
 const NULL3 = C.NULL3 = 0x43;
 const NUMBER1 = C.NUMBER1 = 0x51;
-export const NUMBER3 = C.NUMBER3 = 0x53;
+const NUMBER3 = C.NUMBER3 = 0x53;
 const STRING1 = C.STRING1 = 0x61;
 const STRING2 = C.STRING2 = 0x62;
 const STRING3 = C.STRING3 = 0x63;
@@ -54,6 +54,16 @@ const STRING_BUFFER_SIZE = 64 * 1024;
 
 function alloc(size: number) {
   return Buffer.alloc ? Buffer.alloc(size) : new Buffer(size);
+}
+
+// Slow code to string converter (only used when throwing syntax errors)
+const toknam = (code: any): any => {
+  const keys = Object.keys(C);
+  for (let i = 0, l = keys.length; i < l; i++) {
+    const key = keys[i];
+    if (C[key] === code) { return key; }
+  }
+  return code && ('0x' + code.toString(16));
 }
 
 export interface ArrayToken {
@@ -97,18 +107,8 @@ export type Token =
 
 type InternalToken = Token | ContinueToken;
 
-export class Tokenizer {
+class Tokenizer {
   static C = C;
-
-  // Slow code to string converter (only used when throwing syntax errors)
-  static toknam(code: any): any {
-    const keys = Object.keys(C);
-    for (let i = 0, l = keys.length; i < l; i++) {
-      const key = keys[i];
-      if (C[key] === code) { return key; }
-    }
-    return code && ('0x' + code.toString(16));
-  }
 
   path: (number | string)[];
   tState = START;
@@ -131,10 +131,7 @@ export class Tokenizer {
   // Stream offset
   offset = -1;
 
-  readonly flags: Set<Flag>;
-
-  constructor(flags: Flag[] = []) {
-    this.flags = new Set(flags);
+  constructor(public readonly flags: Set<Flag>) {
     this.parse = this.parse.bind(this);
   }
 
@@ -196,7 +193,7 @@ export class Tokenizer {
 
   private charError(buffer: any, i: any): IteratorResult<Token, Token> {
     this.tState = STOP;
-    const error = 'Unexpected ' + JSON.stringify(String.fromCharCode(buffer[i])) + ' at position ' + i + ' in state ' + Tokenizer.toknam(this.tState);
+    const error = 'Unexpected ' + JSON.stringify(String.fromCharCode(buffer[i])) + ' at position ' + i + ' in state ' + toknam(this.tState);
     /*
     try {
       throw error;
@@ -421,7 +418,7 @@ export class Tokenizer {
         }
         if (this.bytes_remaining === 0 && n >= 128) { // else if no remainder bytes carried over, parse multi byte (>=128) chars one at a time
           if (n <= 193 || n > 244) {
-            return { value: { type: 'error', message: 'Invalid UTF-8 character at position ' + i + ' in state ' + Tokenizer.toknam(this.tState) }, done: true };
+            return { value: { type: 'error', message: 'Invalid UTF-8 character at position ' + i + ' in state ' + toknam(this.tState) }, done: true };
           }
           if ((n >= 194) && (n <= 223)) this.bytes_in_sequence = 2;
           if ((n >= 224) && (n <= 239)) this.bytes_in_sequence = 3;
@@ -662,7 +659,7 @@ export class Tokenizer {
 
   private parseError(token: any, value: any): IteratorResult<Token, Token> {
     this.tState = STOP;
-    const error = 'Unexpected ' + Tokenizer.toknam(token) + (value ? ('(' + JSON.stringify(value) + ')') : '') + ' in state ' + Tokenizer.toknam(this.state);
+    const error = 'Unexpected ' + toknam(token) + (value ? ('(' + JSON.stringify(value) + ')') : '') + ' in state ' + toknam(this.state);
     /*
     try {
       throw new Error(error);
@@ -692,3 +689,29 @@ export class Tokenizer {
     this.stack.push({ value: this.value, key: this.key, mode: this.mode });
   }
 }
+
+export default async function* tokenize(source: AsyncIterable<Uint8Array>, ...args: Flag[]): AsyncGenerator<Token> {
+  const tokenizer = new Tokenizer(new Set(args));
+  for await (const chunk of source) {
+    for (const token of tokenizer.tokenize(chunk)) {
+      if (token.type === 'error') {
+        return token;
+      }
+      if (token.path.length === 0 || !tokenizer.flags.has(STREAMING)) {
+        yield token;
+      }
+    }
+  }
+  if (tokenizer.string?.length > 0 && tokenizer.tState === C.NUMBER3) {
+    const value = Number(tokenizer.string);
+    if (!Number.isNaN(value)) {
+      yield { type: 'value', path: [], value };
+    }
+  }
+}
+
+export const parse = async (source: AsyncIterable<Uint8Array>): Promise<Token> => {
+  const iterator = tokenize(source, STREAMING);
+  const result = await iterator.next();
+  return result?.value;
+};

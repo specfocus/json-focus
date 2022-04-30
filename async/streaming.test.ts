@@ -1,6 +1,7 @@
 import { isAsyncIterable } from '@specfocus/main-focus/src/iterable';
 import { Any } from '../any';
-import iterate from './streaming';
+import { fakeAsync } from './tokenize.test';
+import tokenize, { STREAMING } from './tokenizer';
 import { NO_ROOT_ARRAY, NO_ROOT_SHAPE } from './tokenizer';
 
 const array = [
@@ -63,21 +64,11 @@ describe('Async JSON streamminf', () => {
   });
 });
 
-async function* fakeAsync(test: string): AsyncGenerator<Uint8Array, void, any> {
-  let index = 0;
-  for (index = 0; index < test.length; index++) {
-    const len = 5 + Math.random() * 10;
-    const part = test.substring(index, index + len + 1);
-    index += len;
-    yield Buffer.from(part);
-  }
-}
-
 const test = async (json: string): Promise<Array<Any>> => {
   let result: any[] = [];
   const asyncIterable = fakeAsync(json);
   if (isAsyncIterable(asyncIterable)) {
-    const tokens = iterate(asyncIterable, NO_ROOT_ARRAY, NO_ROOT_SHAPE);
+    const tokens = tokenize(asyncIterable, STREAMING);
     for await (const token of tokens) {
       if (token.type === 'error') {
         break;

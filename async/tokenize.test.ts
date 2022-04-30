@@ -1,7 +1,6 @@
 import { isAsyncIterable } from '@specfocus/main-focus/src/iterable';
 import { Any } from '../any';
-import iterate from './iterate';
-import { NO_ROOT_ARRAY, NO_ROOT_SHAPE } from './tokenizer';
+import tokenize, { NO_ROOT_ARRAY, NO_ROOT_SHAPE } from './tokenizer';
 
 const array = [
   { "name": "Lucas" },
@@ -61,7 +60,7 @@ describe('Async JSON Perser', () => {
   });
 });
 
-async function* fakeAsync(test: string): AsyncGenerator<Uint8Array, void, any> {
+export async function* fakeAsync(test: string): AsyncGenerator<Uint8Array, void, any> {
   let index = 0;
   for (index = 0; index < test.length; index++) {
     const len = 5 + Math.random() * 10;
@@ -75,7 +74,7 @@ const test = async (json: string): Promise<Array<Any>> => {
   let result: any;
   const asyncIterable = fakeAsync(json);
   if (isAsyncIterable(asyncIterable)) {
-    const tokens = iterate(asyncIterable, NO_ROOT_ARRAY, NO_ROOT_SHAPE);
+    const tokens = tokenize(asyncIterable, NO_ROOT_ARRAY, NO_ROOT_SHAPE);
     for await (const token of tokens) {
       if (token.type === 'error') {
         break;
