@@ -130,6 +130,8 @@ interface ValueState extends Pick<BaseState, 'path'> {
 
 type State  = BaseState | ArrayState | ObjectState | ValueState;
 
+const NOTHING: IteratorResult<undefined> = Object.freeze({ done: false, value: undefined });
+
 class Tokenizer {
   state: State = { path: [] };
   tState = START;
@@ -155,9 +157,8 @@ class Tokenizer {
 
   tokenize(data: Uint8Array): Iterable<Token> {
     const self = this;
-    const parse = self.parse;
     function* generator(): Generator<Token, void> {
-      const it = parse(typeof data === 'string' ? Buffer.from(data) : data);
+      const it = self.parse(typeof data === 'string' ? Buffer.from(data) : data);
       for (let result = it.next(); ; result = it.next()) {
         if (typeof result.value !== 'undefined') {
           yield result.value;
@@ -266,7 +267,7 @@ class Tokenizer {
         if (this.flags.has(NO_ROOT_SHAPE) && this.stack.length === 1) {
           return { value: { type: 'shape', path: [] }, done: false };
         }
-        return result;
+        return NOTHING;
       }
       if (token === LEFT_BRACKET) {
         this.push();
@@ -281,19 +282,19 @@ class Tokenizer {
         if (this.flags.has(NO_ROOT_ARRAY) && this.stack.length === 1) {
           return { value: { type: 'array', path: [] }, done: false };
         }
-        return result;
+        return NOTHING;
       }
       if (token === RIGHT_BRACE) {
         if (this.state.mode === OBJECT) {
           this.pop();
-          return result;
+          return NOTHING;
         }
         return this.parseError(token, value);
       }
       if (token === RIGHT_BRACKET) {
         if (this.state.mode === ARRAY) {
           this.pop();
-          return result;
+          return NOTHING;
         }
       }
       return this.parseError(token, value);
@@ -302,18 +303,18 @@ class Tokenizer {
       if (token === STRING) {
         this.state.key = value;
         this.expecting = COLON;
-        return result;
+        return NOTHING;
       }
       if (token === RIGHT_BRACE) {
         this.pop();
-        return result;
+        return NOTHING;
       }
       return this.parseError(token, value);
     }
     if (this.expecting === COLON) {
       if (token === COLON) {
         this.expecting = VALUE;
-        return result;
+        return NOTHING;
       }
       return this.parseError(token, value);
     }
@@ -322,12 +323,12 @@ class Tokenizer {
         if (this.state.mode === ARRAY) {
           this.state.key++;
           this.expecting = VALUE;
-          return result;
+          return NOTHING;
         }
         if (this.state.mode === OBJECT) {
           this.expecting = KEY;
         }
-        return result;
+        return NOTHING;
       }
       if (token === RIGHT_BRACKET && this.state.mode === ARRAY) {
         const val = this.state.value;
@@ -337,7 +338,7 @@ class Tokenizer {
         } else if (!this.flags.has(NO_ROOT_ARRAY)) {
           return { done: !this.flags.has(STREAMING), value: { type: 'array', path: [], value: val } };
         }
-        return result;
+        return NOTHING;
       }
       if (token === RIGHT_BRACE && this.state.mode === OBJECT) {
         const val = this.state.value;
@@ -347,7 +348,7 @@ class Tokenizer {
         } else if (!this.flags.has(NO_ROOT_SHAPE)) {
           return { done: !this.flags.has(STREAMING), value: { type: 'shape', path: [], value: val } };
         }
-        return result;
+        return NOTHING;
       }
     }
     return this.parseError(token, value);
@@ -359,11 +360,10 @@ class Tokenizer {
     let nextIndex = 0;
     const next = (): IteratorResult<InternalToken, InternalToken> => {
       if (nextIndex >= l) {
-        return { done: true, value: undefined };
+        return { value: undefined, done: true };
       }
       const i = nextIndex;
       nextIndex++;
-      let result: IteratorResult<InternalToken, InternalToken> = { done: false, value: undefined };
       if (this.tState === START) {
         n = buffer[i];
         this.offset++;
@@ -387,35 +387,35 @@ class Tokenizer {
         }
         if (n === 0x74) {
           this.tState = TRUE1;  // t
-          return result;
+          return NOTHING;
         }
         if (n === 0x66) {
           this.tState = FALSE1;  // f
-          return result;
+          return NOTHING;
         }
         if (n === 0x6e) {
           this.tState = NULL1; // n
-          return result;
+          return NOTHING;
         }
         if (n === 0x22) { // "
           this.string = '';
           this.stringBufferOffset = 0;
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x2d) {
           this.string = '-';
           this.tState = NUMBER1; // -
-          return result;
+          return NOTHING;
         }
         if (n >= 0x30 && n < 0x40) { // 1-9
           this.string = String.fromCharCode(n);
           this.tState = NUMBER3;
-          return result;
+          return NOTHING;
         }
         if (n === 0x20 || n === 0x09 || n === 0x0a || n === 0x0d) {
           // whitespace
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
@@ -432,7 +432,7 @@ class Tokenizer {
           this.appendStringBuf(this.temp_buffs[this.bytes_in_sequence]);
           this.bytes_in_sequence = this.bytes_remaining = 0;
           nextIndex = i + j;
-          return result;
+          return NOTHING;
         }
         if (this.bytes_remaining === 0 && n >= 128) { // else if no remainder bytes carried over, parse multi byte (>=128) chars one at a time
           if (n <= 193 || n > 244) {
@@ -451,13 +451,13 @@ class Tokenizer {
             this.appendStringBuf(buffer, i, i + this.bytes_in_sequence);
             nextIndex = i + this.bytes_in_sequence;
           }
-          return result;
+          return NOTHING;
         }
         if (n === 0x22) {
           this.tState = START;
           this.string += this.stringBuffer.toString('utf8', 0, this.stringBufferOffset);
           this.stringBufferOffset = 0;
-          result = this.onToken(STRING, this.string);
+          const result = this.onToken(STRING, this.string);
           if (result.done) {
             return result;
           }
@@ -467,11 +467,11 @@ class Tokenizer {
         }
         if (n === 0x5c) {
           this.tState = STRING2;
-          return result;
+          return NOTHING;
         }
         if (n >= 0x20) {
           this.appendStringChar(n);
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
@@ -480,47 +480,47 @@ class Tokenizer {
         if (n === 0x22) {
           this.appendStringChar(n);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x5c) {
           this.appendStringChar(BACK_SLASH);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x2f) {
           this.appendStringChar(FORWARD_SLASH);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x62) {
           this.appendStringChar(BACKSPACE);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x66) {
           this.appendStringChar(FORM_FEED);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x6e) {
           this.appendStringChar(NEWLINE);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x72) {
           this.appendStringChar(CARRIAGE_RETURN);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x74) {
           this.appendStringChar(TAB);
           this.tState = STRING1;
-          return result;
+          return NOTHING;
         }
         if (n === 0x75) {
           this.unicode = '';
           this.tState = STRING3;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
@@ -546,7 +546,7 @@ class Tokenizer {
             }
             this.tState = STRING1;
           }
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
@@ -573,35 +573,35 @@ class Tokenizer {
             break;
           default:
             this.tState = START;
-            result = this.numberReviver(this.string, buffer, i);
+            const result = this.numberReviver(this.string, buffer, i);
             if (result.done) {
               return result;
             }
             this.offset += this.string.length - 1;
             this.string = undefined;
             nextIndex--;
-            break;
-        }
         return result;
+        }
+        return NOTHING;
       }
       if (this.tState === TRUE1) { // r
         if (buffer[i] === 0x72) {
           this.tState = TRUE2;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === TRUE2) { // u
         if (buffer[i] === 0x75) {
           this.tState = TRUE3;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === TRUE3) { // e
         if (buffer[i] === 0x65) {
           this.tState = START;
-          result = this.onToken(TRUE, true);
+          const result = this.onToken(TRUE, true);
           if (result.done) {
             return result;
           }
@@ -613,28 +613,28 @@ class Tokenizer {
       if (this.tState === FALSE1) { // a
         if (buffer[i] === 0x61) {
           this.tState = FALSE2;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === FALSE2) { // l
         if (buffer[i] === 0x6c) {
           this.tState = FALSE3;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === FALSE3) { // s
         if (buffer[i] === 0x73) {
           this.tState = FALSE4;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === FALSE4) { // e
         if (buffer[i] === 0x65) {
           this.tState = START;
-          result = this.onToken(FALSE, false);
+          const result = this.onToken(FALSE, false);
           if (result.done) {
             return result;
           }
@@ -646,21 +646,21 @@ class Tokenizer {
       if (this.tState === NULL1) { // u
         if (buffer[i] === 0x75) {
           this.tState = NULL2;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === NULL2) { // l
         if (buffer[i] === 0x6c) {
           this.tState = NULL3;
-          return result;
+          return NOTHING;
         }
         return this.charError(buffer, i);
       }
       if (this.tState === NULL3) { // l
         if (buffer[i] === 0x6c) {
           this.tState = START;
-          result = this.onToken(NULL, null);
+          const result = this.onToken(NULL, null);
           if (result.done) {
             return result;
           }
@@ -669,7 +669,7 @@ class Tokenizer {
         }
         return this.charError(buffer, i);
       }
-      return result;
+      return NOTHING;
     };
 
     return { next };

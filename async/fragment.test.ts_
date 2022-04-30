@@ -75,7 +75,7 @@ const test = async (json: string): Promise<Array<Any>> => {
   let result: any;
   const asyncIterable = fakeAsync(json);
   if (isAsyncIterable(asyncIterable)) {
-    const tokens = iterate(asyncIterable, NO_ROOT_ARRAY, NO_ROOT_SHAPE);
+    const tokens = iterate(asyncIterable);
     for await (const token of tokens) {
       if (token.type === 'error') {
         break;
