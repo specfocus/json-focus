@@ -1,6 +1,7 @@
 import type { Flag, Token } from './tokenizer';
 import { NUMBER3, Tokenizer } from './tokenizer';
 
+/** JSONStream */
 export default async function* generator(source: AsyncIterable<Uint8Array>, ...flags: Flag[]): AsyncGenerator<Token> {
   const tokenizer = new Tokenizer(flags);
   let count = 0;
@@ -8,6 +9,13 @@ export default async function* generator(source: AsyncIterable<Uint8Array>, ...f
     for (const token of tokenizer.tokenize(chunk)) {
       if (token.type === 'error') {
         return token;
+      }
+      console.log({ token });
+      switch (token?.type) {
+        case 'array':
+        case 'shape':
+        case 'value':
+          break;
       }
       yield token;
       count++;

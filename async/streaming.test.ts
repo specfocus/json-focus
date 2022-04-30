@@ -1,6 +1,6 @@
 import { isAsyncIterable } from '@specfocus/main-focus/src/iterable';
 import { Any } from '../any';
-import iterate from './iterate';
+import iterate from './streaming';
 import { NO_ROOT_ARRAY, NO_ROOT_SHAPE } from './tokenizer';
 
 const array = [
@@ -29,35 +29,37 @@ const json = {
   "age": 55.3
 };
 
-describe('Async JSON Perser', () => {
+describe('Async JSON streamminf', () => {
   it('should parse integer', async () => {
-    const output = await test(JSON.stringify(100));
-    expect(output).toEqual(100);
+    const arr = [100, 'hello', true, 100.67];
+    const output = await test(arr.map(v => JSON.stringify(v)).join(' '));
+    expect(output).toEqual(arr);
   });
 
   it('should parse float', async () => {
     const output = await test(JSON.stringify(100.67));
-    expect(output).toEqual(100.67);
+    expect(output).toEqual([100.67]);
   });
 
   it('should parse string', async () => {
     const output = await test(JSON.stringify('hello'));
-    expect(output).toEqual('hello');
+    expect(output).toEqual(['hello']);
   });
 
   it('should parse boolean', async () => {
     const output = await test(JSON.stringify(true));
-    expect(output).toEqual(true);
+    expect(output).toEqual([true]);
   });
 
   it('should parse array', async () => {
-    const output = await test(JSON.stringify(array));
-    expect(output).toEqual(array);
+    const arr = [array, json, array, 'hello', true, 65675];
+    const output = await test(arr.map(v => JSON.stringify(v)).join(' '));
+    expect(output).toEqual(arr);
   });
 
   it('should parse object', async () => {
     const output = await test(JSON.stringify(json));
-    expect(output).toEqual(json);
+    expect(output).toEqual([json]);
   });
 });
 
@@ -72,7 +74,7 @@ async function* fakeAsync(test: string): AsyncGenerator<Uint8Array, void, any> {
 }
 
 const test = async (json: string): Promise<Array<Any>> => {
-  let result: any;
+  let result: any[] = [];
   const asyncIterable = fakeAsync(json);
   if (isAsyncIterable(asyncIterable)) {
     const tokens = iterate(asyncIterable, NO_ROOT_ARRAY, NO_ROOT_SHAPE);
@@ -80,23 +82,7 @@ const test = async (json: string): Promise<Array<Any>> => {
       if (token.type === 'error') {
         break;
       }
-      const { path, type, value } = token;
-      if (path?.length == 0) {
-        switch(type) {
-          case 'array':
-            result = [];
-            break;
-          case 'shape':
-            result = {};
-            break;
-          case 'value':
-            result = value;
-            break;
-        }
-      } else if (path?.length === 1) {
-        const key = path[0];
-        result[key] = value;
-      }
+      result.push(token.value);
     }
   }
   return result;

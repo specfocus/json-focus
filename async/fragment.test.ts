@@ -1,6 +1,6 @@
 import { isAsyncIterable } from '@specfocus/main-focus/src/iterable';
 import { Any } from '../any';
-import iterate from './iterate';
+import iterate from './fragment';
 import { NO_ROOT_ARRAY, NO_ROOT_SHAPE } from './tokenizer';
 
 const array = [
