@@ -86,7 +86,7 @@ const test = async (json: string): Promise<Array<Any>> => {
           case 'array':
             result = [];
             break;
-          case 'shape':
+          case 'object':
             result = {};
             break;
           case 'value':
