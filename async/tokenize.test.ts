@@ -79,13 +79,14 @@ const test = async (json: string): Promise<Array<Any>> => {
       if (token.type === 'error') {
         break;
       }
+      // @ts-ignore
       const { path, type, value } = token;
       if (path?.length == 0) {
         switch(type) {
           case 'array':
             result = [];
             break;
-          case 'shape':
+          case 'object':
             result = {};
             break;
           case 'value':

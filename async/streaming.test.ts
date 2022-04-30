@@ -73,6 +73,7 @@ const test = async (json: string): Promise<Array<Any>> => {
       if (token.type === 'error') {
         break;
       }
+      // @ts-ignore
       result.push(token.value);
     }
   }
