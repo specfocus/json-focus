@@ -112,7 +112,7 @@ export interface BooleanToken extends Pick<State, 'path'> {
   value: boolean;
 }
 
-export interface ErrorToken extends Pick<State, 'path'> {
+export interface Fallacy extends Pick<State, 'path'> {
   type: 'error';
   message: string;
 }
@@ -145,14 +145,13 @@ export interface ValueToken extends Pick<State, 'path'> {
 export type Token =
   | ArrayToken // root is an array
   | BooleanToken
-  | ErrorToken
   | NullToken
   | NumberToken
   | ObjectToken // root is an object
   | StringToken
   | ValueToken; // root is a value
 
-type InternalToken = Token | undefined;
+type InternalToken = Fallacy | Token | undefined;
 type TokenResult = IteratorResult<InternalToken, InternalToken>;
 
 export const STREAMING = 'streaming';
@@ -199,15 +198,14 @@ export class Tokenizer {
       const value = Number(this.string);
       if (!Number.isNaN(value)) {
         iterable = [{ type: NUMBER_TYPE, path: [], value }];
-        console.log('flishing', iterable)
       }
     }
     return iterable;
   }
 
-  tokenize(data: Uint8Array): Iterable<Token> {
+  tokenize(data: Uint8Array): Iterable<Token | Fallacy> {
     const self = this;
-    function* generator(): Generator<Token, void> {
+    function* generator(): Generator<Token | Fallacy, void> {
       const it = self.parse(typeof data === 'string' ? Buffer.from(data) : data);
       for (let result = it.next(); ; result = it.next()) {
         if (typeof result.value !== 'undefined') {
@@ -759,7 +757,7 @@ export class Tokenizer {
   }
 }
 
-export default async function* tokenize(source: AsyncIterable<Uint8Array>, ...args: Flag[]): AsyncGenerator<Token> {
+export default async function* tokenize(source: AsyncIterable<Uint8Array>, ...args: Flag[]): AsyncGenerator<Token | Fallacy> {
   const tokenizer = new Tokenizer(new Set(args));
   for await (const chunk of source) {
     for (const token of tokenizer.tokenize(chunk)) {
@@ -771,14 +769,12 @@ export default async function* tokenize(source: AsyncIterable<Uint8Array>, ...ar
       }
     }
   }
-  console.log('FLUSH');
   for (const token of tokenizer.flush()) {
-    console.log({ token })
     yield token;
   }
 }
 
-export const parse = async (source: AsyncIterable<Uint8Array>): Promise<Token> => {
+export const parse = async (source: AsyncIterable<Uint8Array>): Promise<Token | Fallacy> => {
   const tokenizer = tokenize(source, STREAMING);
   const result = await tokenizer.next();
   return result?.value;

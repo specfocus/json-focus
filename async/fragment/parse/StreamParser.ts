@@ -1,4 +1,4 @@
-import { C, Tokenizer, Token } from '../../tokenizer';
+import { C, Tokenizer, Token, Fallacy } from '../../tokenizer';
 import { Through } from '@specfocus/main-focus/src/through';
 import { Stream, Transform, TransformOptions } from 'stream';
 import check from './check';
@@ -29,7 +29,7 @@ export class StreamParser extends Tokenizer {
     this.stream = new Through(this.transform, this.flush);
   }
 
-  transform(chunk: string | Buffer, encoding: BufferEncoding, callback: (error?: Error, data?: Token) => void): void {
+  transform(chunk: string | Buffer, encoding: BufferEncoding, callback: (error?: Error, data?: Token | Fallacy) => void): void {
     if (typeof chunk === 'string') chunk = Buffer.from(chunk);
     const tokens = this.tokenize(chunk);
     for (const token of tokens) {

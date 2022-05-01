@@ -22,6 +22,12 @@ export { NUMBER_TYPE } from './number';
 export { OBJECT_TYPE } from './object';
 export { STRING_TYPE } from './string';
 
+export type { ArrayJsonSchema, ArrayType } from './array';
+export type { BooleanJsonSchema, BooleanType } from './boolean';
+export type { NumberJsonSchema, NumberType } from './number';
+export type { ObjectJsonSchema, ObjectType } from './object';
+export type { StringJsonSchema, StringType } from './string';
+
 function addMethod<T extends AnySchema>(
   schemaType: (...arg: any[]) => T,
   name: string,
