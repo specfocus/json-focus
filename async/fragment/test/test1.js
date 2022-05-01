@@ -3,7 +3,7 @@
 var fs = require ('fs')
   , join = require('path').join
   , file = join(__dirname, 'fixtures','all_npm.json')
-  , JSONStream = require('../')
+  , JSONStream = require('..')
   , it = require('it-is')
 
 var expected = JSON.parse(fs.readFileSync(file))

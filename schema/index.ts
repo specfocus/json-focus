@@ -16,6 +16,12 @@ import type { TypeOf, Asserts, Config } from './base';
 import { Maybe } from '@specfocus/main-focus/src/maybe';
 import { AnyObject } from '@specfocus/main-focus/src/object';
 
+export { ARRAY_TYPE } from './array';
+export { BOOLEAN_TYPE } from './boolean';
+export { NUMBER_TYPE } from './number';
+export { OBJECT_TYPE } from './object';
+export { STRING_TYPE } from './string';
+
 function addMethod<T extends AnySchema>(
   schemaType: (...arg: any[]) => T,
   name: string,

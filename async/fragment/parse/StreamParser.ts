@@ -1,4 +1,4 @@
-import Tokenizer, { Token } from '../../async/tokenizer';
+import { C, Tokenizer, Token } from '../../tokenizer';
 import { Through } from '@specfocus/main-focus/src/through';
 import { Stream, Transform, TransformOptions } from 'stream';
 import check from './check';
@@ -25,8 +25,7 @@ export class StreamParser extends Tokenizer {
   }
 
   constructor(public path: string[], public map: any) {
-    super();
-
+    super(new Set([]));
     this.stream = new Through(this.transform, this.flush);
   }
 
@@ -50,7 +49,7 @@ export class StreamParser extends Tokenizer {
       this.stream.emit('footer', this.footer);
     }
 
-    if (this.tState !== Tokenizer.C.START || this.stack.length > 0) {
+    if (this.tState !== C.START || this.stack.length > 0) {
       callback(new Error('Incomplete JSON'))
       return
     }
@@ -117,19 +116,19 @@ export class StreamParser extends Tokenizer {
       .map(function (element: any) {
         return element.key
       })
-      .concat([this.key])
+      .concat([this.state.key])
     let data = value
     if (null != data)
       if (null != (data = this.map ? this.map(data, actualPath) : data)) {
         if (emitKey || emitPath) {
           data = { value: data }
-          if (emitKey) data.key = this.key
+          if (emitKey) data.key = this.state.key
           if (emitPath) data.path = actualPath
         }
 
         this.stream.push(data)
       }
-    if (this.value) delete this.value[this.key]
+    if (this.state.value) delete this.state.value[this.state.key]
     for (const k in this.stack) if (!Object.isFrozen(this.stack[k])) this.stack[k].value = null
   }
 
