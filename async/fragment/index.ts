@@ -1,6 +1,6 @@
 import { ARRAY_TYPE, OBJECT_TYPE } from '../../schema';
 import check from './check';
-import { Token, Tokenizer } from '../tokenizer';
+import tokenize, { STREAMING, Token, Tokenizer } from '../tokenizer';
 
 type Any = true;
 type EmitKey = { emitKey: true; };
@@ -11,7 +11,10 @@ type Node = Any | EmitKey | Index | Key | Recurse;
 type Path = Node[];
 
 /** JSONStream */
-export default async function* generator(source: AsyncIterable<Uint8Array>, path: Path, map?: (data: any, path: (number | string)[]) => void): AsyncGenerator<Token> {
+export default async function* generator(source: AsyncIterable<Uint8Array>, selector: Path, map?: (data: any, path: (number | string)[]) => void): AsyncGenerator<Token> {
+  if (!selector?.length) {
+    return tokenize(source, STREAMING);
+  }
   let count = 0;
   const tokenizer = new Tokenizer(new Set([]));
   for await (const chunk of source) {
@@ -19,15 +22,10 @@ export default async function* generator(source: AsyncIterable<Uint8Array>, path
       if (token.type === 'error') {
         return token;
       }
-
+      const { path, type } = token;
       const { state, stack } = tokenizer;
 
-      if (stack.length === 0 && !path?.length) {
-        yield token;
-        count++;
-        console.log(count);
-        continue;
-      }
+      console.log({ type, path});
 
       switch (token?.type) {
         case ARRAY_TYPE:
@@ -40,8 +38,8 @@ export default async function* generator(source: AsyncIterable<Uint8Array>, path
       let j = 0; // iterates on stack
       let emitKey = false;
       let emitPath = false;
-      while (i < path.length) {
-        const key: any = path[i];
+      while (i < selector.length) {
+        const key: any = selector[i];
         let c;
         j++;
 
@@ -57,7 +55,7 @@ export default async function* generator(source: AsyncIterable<Uint8Array>, path
           i++;
         } else {
           i++;
-          const nextKey = path[i];
+          const nextKey = selector[i];
           if (!nextKey) return;
           while (true) {
             c = (j === stack.length) ? this : stack[j];
@@ -113,7 +111,7 @@ export default async function* generator(source: AsyncIterable<Uint8Array>, path
   }
 };
 
-export const path = (s: string): Path => s.split('.').map(e => {
+export const parseSelector = (s: string): Path => s.split('.').map(e => {
   if (e === '$*') {
     return { emitKey: true };
   }

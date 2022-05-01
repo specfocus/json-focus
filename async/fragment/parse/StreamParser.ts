@@ -41,7 +41,7 @@ export class StreamParser extends Tokenizer {
     }
   }
 
-  flush(callback: (error?: Error, data?: Token) => void): void {
+  _flush(callback: (error?: Error, data?: Token) => void): void {
     if (this.header) {
       this.stream.emit('header', this.header);
     }

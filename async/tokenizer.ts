@@ -193,6 +193,18 @@ export class Tokenizer {
     this.parse = this.parse.bind(this);
   }
 
+  flush(): Iterable<Token> {
+    let iterable: Iterable<Token> = [];
+    if (this.string?.length > 0 && this.tState === C.NUMBER3) {
+      const value = Number(this.string);
+      if (!Number.isNaN(value)) {
+        iterable = [{ type: NUMBER_TYPE, path: [], value }];
+        console.log('flishing', iterable)
+      }
+    }
+    return iterable;
+  }
+
   tokenize(data: Uint8Array): Iterable<Token> {
     const self = this;
     function* generator(): Generator<Token, void> {
@@ -759,11 +771,10 @@ export default async function* tokenize(source: AsyncIterable<Uint8Array>, ...ar
       }
     }
   }
-  if (tokenizer.string?.length > 0 && tokenizer.tState === C.NUMBER3) {
-    const value = Number(tokenizer.string);
-    if (!Number.isNaN(value)) {
-      yield { type: 'value', path: [], value };
-    }
+  console.log('FLUSH');
+  for (const token of tokenizer.flush()) {
+    console.log({ token })
+    yield token;
   }
 }
 
