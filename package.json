@@ -1,13 +1,15 @@
 {
   "name": "@specfocus/json-focus",
+  "type": "module",
   "version": "0.0.1",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/specfocus/release.git"
+  },
   "description": "JSON schema, validation and serialization",
   "main": "src/index.ts",
   "types": "types",
-  "repository": {
-    "type": "git",
-    "url": "git@github.com:specfocus/release.git"
-  },
   "scripts": {
     "release": "node ../../scripts/publish json-focus ./release/packages",
     "build": "rimraf ../../release/packages/json-focus && tsc",
